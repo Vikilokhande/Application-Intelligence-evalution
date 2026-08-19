@@ -1,0 +1,93 @@
+[
+  {
+    "name": "complete_application",
+    "form_data": {
+      "applicant_name": "Riverbend Municipal Council",
+      "organization_type": "Municipality",
+      "project_title": "Canal Edge Urban Greening",
+      "project_category": "Urban Greening",
+      "project_cost": 4800000,
+      "duration_months": 18,
+      "environmental_benefit": "Native shade trees and runoff control for a dense urban canal corridor."
+    },
+    "documents": ["application_form.json", "proposal.pdf", "budget.csv", "certificate.pdf"]
+  },
+  {
+    "name": "incomplete_application",
+    "form_data": {
+      "applicant_name": "North Valley Community Trust",
+      "organization_type": "Registered NGO",
+      "project_title": "Wetland Learning Trail"
+    },
+    "documents": ["proposal.pdf"]
+  },
+  {
+    "name": "contradictory_application",
+    "form_data": {
+      "applicant_name": "Eastbank Green Forum",
+      "organization_type": "Registered NGO",
+      "project_title": "School Rain Garden Network",
+      "project_category": "Water Conservation",
+      "project_cost": 4800000,
+      "duration_months": 12
+    },
+    "documents": ["proposal_cost_48_lakh.pdf", "budget_cost_55_lakh.csv", "certificate.pdf"]
+  },
+  {
+    "name": "low_quality_application",
+    "form_data": {
+      "applicant_name": "South Ridge Cooperative",
+      "project_title": "Sparse Submission",
+      "project_cost": 1000000
+    },
+    "documents": ["image_only.png"]
+  },
+  {
+    "name": "duplicate_application",
+    "form_data": {
+      "applicant_name": "Riverbend Municipal Council",
+      "organization_type": "Municipality",
+      "project_title": "Canal Edge Urban Greening",
+      "project_cost": 4800000,
+      "duration_months": 18
+    },
+    "documents": ["proposal.pdf", "budget.csv"]
+  },
+  {
+    "name": "suspicious_application",
+    "form_data": {
+      "applicant_name": "Horizon Civic Works",
+      "organization_type": "Private Vendor",
+      "project_title": "High Value Restoration",
+      "project_category": "Urban Greening",
+      "project_cost": 15000000,
+      "duration_months": 30
+    },
+    "documents": ["proposal.pdf", "budget.csv", "certificate_without_number.pdf"]
+  },
+  {
+    "name": "borderline_application",
+    "form_data": {
+      "applicant_name": "Lakeview Academic Centre",
+      "organization_type": "Academic Institution",
+      "project_title": "Campus Biodiversity Corridor",
+      "project_category": "Urban Greening",
+      "project_cost": 5000000,
+      "duration_months": 24
+    },
+    "documents": ["proposal.pdf", "budget.csv", "certificate.pdf"]
+  },
+  {
+    "name": "normal_application",
+    "form_data": {
+      "applicant_name": "Hillward Panchayat Council",
+      "organization_type": "Government Agency",
+      "project_title": "Native Sapling Micro Nursery",
+      "project_category": "Urban Greening",
+      "project_cost": 2200000,
+      "duration_months": 10
+    },
+    "documents": ["proposal.pdf", "budget.csv", "certificate.pdf"]
+  }
+]
+
