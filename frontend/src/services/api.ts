@@ -59,5 +59,10 @@ export const api = {
   analytics: () => request<AnalyticsOverview>("/analytics/overview"),
   schemes: () => request<SchemeRead[]>("/schemes"),
   createRule: (schemeId: string, payload: Record<string, unknown>) =>
-    request<SchemeRule>(`/schemes/${schemeId}/rules`, { method: "POST", body: JSON.stringify(payload) })
+    request<SchemeRule>(`/schemes/${schemeId}/rules`, { method: "POST", body: JSON.stringify(payload) }),
+  searchKnowledge: (query: string) =>
+    request<Array<{ document: string; content: string; score?: number; source?: string }>>(
+      `/knowledge/search?q=${encodeURIComponent(query)}`
+    )
 };
+

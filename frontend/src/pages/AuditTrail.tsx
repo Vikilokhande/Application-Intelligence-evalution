@@ -1,24 +1,51 @@
+import { ScrollText, ShieldCheck } from "lucide-react";
+import { ActivityTimeline } from "../components/ActivityTimeline";
 import { SectionPanel } from "../components/SectionPanel";
+import { StatusBadge } from "../components/StatusBadge";
 import type { ApplicationDetail } from "../types/api";
 
 export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
   if (!detail) {
-    return <SectionPanel title="Audit Trail">Select or create an application.</SectionPanel>;
+    return (
+      <SectionPanel title="Governance Audit Trail">
+        <div className="p-8 text-center text-sm text-[#64748B]">
+          No application selected. Select an application from the <span className="font-bold text-[#0F766E]">Dashboard</span> to inspect the audit log.
+        </div>
+      </SectionPanel>
+    );
   }
 
   return (
-    <SectionPanel title="Audit Trail">
-      <div className="divide-y divide-line">
-        {detail.audit_trail.map((event, index) => (
-          <div className="grid gap-2 py-3 md:grid-cols-[220px_180px_1fr]" key={`${event.event_type}-${index}`}>
-            <div className="font-semibold text-ink">{String(event.event_type).replaceAll("_", " ")}</div>
-            <div className="text-sm text-slate-500">{new Date(String(event.created_at)).toLocaleString()}</div>
-            <code className="text-xs text-slate-600">{JSON.stringify(event.event_payload)}</code>
+    <div className="space-y-6">
+      {/* Audit Banner */}
+      <div className="panel border-l-4 border-l-[#0F766E] bg-gradient-to-r from-white via-[#F8FAFC] to-[#F0FDF4] p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-extrabold text-[#0F172A] tracking-tight">
+                Case Decision Audit Log
+              </h1>
+              <span className="human-boundary-badge">✓ Tamper-Traceable Log</span>
+            </div>
+            <p className="mt-1 text-xs text-[#475569]">
+              Audit trail for <strong className="text-[#0F172A]">{detail.project_title ?? "Selected Case"}</strong> • Every human decision and AI inference is immutable and recorded.
+            </p>
           </div>
-        ))}
-        {!detail.audit_trail.length && <div className="py-4 text-sm text-slate-500">No audit events recorded.</div>}
+          <StatusBadge value={detail.status} />
+        </div>
       </div>
-    </SectionPanel>
+
+      {/* Audit Timeline Section */}
+      <SectionPanel
+        title="Visual Investigation Timeline"
+        action={
+          <span className="text-xs font-semibold text-[#0F766E] flex items-center gap-1.5">
+            <ShieldCheck size={14} /> {detail.audit_trail.length} Event(s) Traceable
+          </span>
+        }
+      >
+        <ActivityTimeline events={detail.audit_trail} />
+      </SectionPanel>
+    </div>
   );
 }
-

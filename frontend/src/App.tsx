@@ -10,6 +10,7 @@ import { ReviewerWorkspace } from "./pages/ReviewerWorkspace";
 import { SchemeRules } from "./pages/SchemeRules";
 import { ScoringExplainability } from "./pages/ScoringExplainability";
 import { ValidationVerification } from "./pages/ValidationVerification";
+import { LoginPage } from "./pages/LoginPage";
 import { api } from "./services/api";
 import type { AnalyticsOverview, ApplicationDetail, ApplicationSummary, SchemeRead, WorkflowResponse } from "./types/api";
 
@@ -157,6 +158,7 @@ export default function App() {
           {error}
         </div>
       )}
+      {page === "login" && <LoginPage onLoginSuccess={() => setPage("dashboard")} />}
       {page === "dashboard" && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
       {page === "new" && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
@@ -170,3 +172,4 @@ export default function App() {
     </Shell>
   );
 }
+
