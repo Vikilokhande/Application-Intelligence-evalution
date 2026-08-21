@@ -11,11 +11,13 @@ Does NOT test production LLM/OCR providers (requires real infrastructure).
 from sqlalchemy import select
 
 from app.features.service import feature_engineering_service
+from app.extraction.providers import GroqLLMProvider
 from app.ml.scoring import BaselineScoringService, XGBoostScoringService
 from app.models import Application, ModelPrediction, RuleResult, Scheme, ValidationResult
 from app.routing.service import routing_service
 from app.rules.engine import rule_engine
 from app.schemas.application import ApplicationCreate
+from app.validation.service import ValidationService, build_validation_summary
 from app.workflow.graph import application_workflow_graph
 from app.workflow.state import WORKFLOW_NODES, initial_state
 
@@ -114,6 +116,55 @@ def test_baseline_scoring_is_labeled_development_model():
     assert result["status"] == "GENERATED_DEVELOPMENT_MODEL"
     assert result["prediction_class"] == "LOW_RISK"
     assert result["provider"] == "baseline"
+
+
+def test_validation_result_contains_structured_category_and_summary():
+    svc = ValidationService()
+    results = [
+        svc._result("app", "REQUIRED_FIELD", "PASS", "Applicant name is present."),
+        svc._result("app", "DOCUMENT_LLM", "NOT_CHECKED", "LLM unavailable.", "WARNING", check_id="DOCUMENT_LLM_NOT_CHECKED"),
+        svc._result("app", "RAG_PROJECT_COST_LIMIT", "FAIL", "Cost exceeds retrieved guideline.", "ERROR", confidence=0.9),
+    ]
+    assert results[0].evidence["validator"] == "deterministic"
+    assert results[1].evidence["validation_category"] == "DOCUMENT_LLM"
+    assert results[2].evidence["validator"] == "rag"
+    summary = build_validation_summary(results)
+    assert summary["overall_status"] == "FAIL"
+    assert summary["failed"] == 1
+    assert summary["not_checked"] == 1
+
+
+def test_baseline_scoring_uses_validation_derived_features_for_risk_factors():
+    result = BaselineScoringService().score(
+        {
+            "document_completeness_ratio": 0.5,
+            "missing_document_count": 2,
+            "financial_rule_fail_count": 1,
+            "duration_rule_fail_count": 1,
+            "eligibility_rule_fail_count": 1,
+            "contradiction_count": 1,
+            "extraction_confidence": 0.9,
+            "validation_confidence": 0.9,
+            "budget_consistency": 0,
+            "proposal_quality": 0.5,
+            "environmental_impact": 1,
+        }
+    )
+    assert result["status"] == "GENERATED_DEVELOPMENT_MODEL"
+    assert result["feature_schema_version"] == "1.1"
+    assert result["prediction_class"] in {"MEDIUM_RISK", "HIGH_RISK"}
+    assert "required_documents_missing" in result["top_risk_factors"]
+
+
+def test_groq_structured_extraction_prompt_handles_json_example_braces():
+    class ProbeGroqProvider(GroqLLMProvider):
+        def _call_api(self, messages, json_mode=False, correlation_id=""):  # type: ignore[no-untyped-def]
+            assert "applicant_name" in messages[0]["content"]
+            return '{"applicant_name":{"value":"Eastbank Green Forum","confidence":0.93,"source":"Applicant: Eastbank Green Forum"}}'
+
+    provider = ProbeGroqProvider(api_key="test", model="llama3-8b-8192", base_url="https://example.invalid")
+    result = provider.extract_structured("Applicant: Eastbank Green Forum", "ApplicationFields", correlation_id="app")
+    assert result["applicant_name"]["value"] == "Eastbank Green Forum"
 
 
 def test_xgboost_scorer_raises_model_unavailable_when_no_model():

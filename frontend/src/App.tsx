@@ -15,7 +15,18 @@ import { api } from "./services/api";
 import type { AnalyticsOverview, ApplicationDetail, ApplicationSummary, SchemeRead, WorkflowResponse } from "./types/api";
 
 export default function App() {
-  const [page, setPage] = useState<PageKey>("dashboard");
+  // Session Persistence: Read stored session on load
+  const [userSession, setUserSession] = useState<{ email: string; role: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem("app_user_session");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Login is the DEFAULT 1st Entry Point if unauthenticated
+  const [page, setPage] = useState<PageKey>(() => (userSession ? "dashboard" : "login"));
   const [applications, setApplications] = useState<ApplicationSummary[]>([]);
   const [schemes, setSchemes] = useState<SchemeRead[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
@@ -28,6 +39,7 @@ export default function App() {
   const selectedTitle = useMemo(() => detail?.project_title ?? applications.find((item) => item.id === selectedId)?.project_title ?? null, [applications, detail, selectedId]);
 
   const refreshLists = useCallback(async () => {
+    if (!userSession) return;
     const [apps, schemeList, overview] = await Promise.all([api.listApplications(), api.schemes(), api.analytics()]);
     setApplications(apps);
     setSchemes(schemeList);
@@ -35,11 +47,11 @@ export default function App() {
     if (!selectedId && apps[0]) {
       setSelectedId(apps[0].id);
     }
-  }, [selectedId]);
+  }, [selectedId, userSession]);
 
   const refreshDetail = useCallback(
     async (id: string | null = selectedId) => {
-      if (!id) {
+      if (!id || !userSession) {
         setDetail(null);
         setWorkflow(null);
         return;
@@ -48,22 +60,42 @@ export default function App() {
       setDetail(nextDetail);
       setWorkflow(nextWorkflow);
     },
-    [selectedId]
+    [selectedId, userSession]
   );
 
   useEffect(() => {
-    refreshLists().catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load data"));
-  }, [refreshLists]);
+    if (userSession) {
+      refreshLists().catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load data"));
+    }
+  }, [refreshLists, userSession]);
 
   useEffect(() => {
-    refreshDetail().catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load application"));
-  }, [refreshDetail]);
+    if (userSession && selectedId) {
+      refreshDetail().catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load application"));
+    }
+  }, [refreshDetail, selectedId, userSession]);
 
   useEffect(() => {
-    if (page === "review" && selectedId) {
+    if (page === "review" && selectedId && userSession) {
       api.recordReviewOpened(selectedId).catch(() => undefined);
     }
-  }, [page, selectedId]);
+  }, [page, selectedId, userSession]);
+
+  function handleLogin(user: { email: string; role: string }) {
+    setUserSession(user);
+    try {
+      localStorage.setItem("app_user_session", JSON.stringify(user));
+    } catch {}
+    setPage("dashboard");
+  }
+
+  function handleLogout() {
+    setUserSession(null);
+    try {
+      localStorage.removeItem("app_user_session");
+    } catch {}
+    setPage("login");
+  }
 
   async function selectApplication(id: string) {
     setSelectedId(id);
@@ -151,14 +183,18 @@ export default function App() {
     }
   }
 
+  // 1st Entry Point Guard: Unauthenticated users or "login" page render Full-Screen Login Page
+  if (!userSession || page === "login") {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
+
   return (
-    <Shell page={page} onPageChange={setPage} selectedTitle={selectedTitle}>
+    <Shell page={page} onPageChange={setPage} selectedTitle={selectedTitle} userSession={userSession} onLogout={handleLogout}>
       {error && (
         <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           {error}
         </div>
       )}
-      {page === "login" && <LoginPage onLoginSuccess={() => setPage("dashboard")} />}
       {page === "dashboard" && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
       {page === "new" && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
@@ -172,4 +208,3 @@ export default function App() {
     </Shell>
   );
 }
-

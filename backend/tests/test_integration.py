@@ -68,6 +68,15 @@ def test_upload_process_detects_budget_contradiction_and_records_review():
                    f"Unexpected contradiction message: {fail_contradictions[0]['message']}"
         # else: skip — LLM extraction unavailable on this environment
 
+        structured_validation = client.get(
+            f"/api/v1/applications/{application_id}/validation",
+            params={"structured": "true"},
+        ).json()
+        assert structured_validation["version"] == "1.1"
+        assert "deterministic_checks" in structured_validation
+        assert "document_llm_checks" in structured_validation
+        assert "rag_checks" in structured_validation
+
         score = client.get(f"/api/v1/applications/{application_id}/score").json()
         # Accept baseline, explicit unavailable, normal generation, or verbose ML_PROVIDER message
         accepted_statuses = ("GENERATED_DEVELOPMENT_MODEL", "ML scoring unavailable.", "GENERATED")

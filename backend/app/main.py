@@ -103,6 +103,14 @@ def _check_ml_health() -> dict[str, str]:
     return {"status": "model_ready", "provider": settings.ml_provider, "path": model_path}
 
 
+def _check_embedding_health() -> dict[str, str]:
+    return {
+        "status": "configured",
+        "provider": settings.embedding_provider,
+        "model": settings.embedding_model,
+    }
+
+
 def _check_database_health() -> dict[str, str]:
     try:
         with SessionLocal() as db:
@@ -130,10 +138,12 @@ _startup_status: dict[str, dict[str, str]] = {}
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global _startup_status
+    global _startup_status, settings
 
     # Clear settings cache so updated .env values take effect
     get_settings.cache_clear()
+    settings = get_settings()
+    knowledge_base.settings = settings
 
     # 1. Init DB
     init_db()
@@ -148,6 +158,7 @@ async def lifespan(_: FastAPI):
     _startup_status["llm"] = _check_llm_health()
     _startup_status["ocr"] = _check_ocr_health()
     _startup_status["ml"] = _check_ml_health()
+    _startup_status["embedding"] = _check_embedding_health()
 
     # 4. Index knowledge base
     try:
@@ -211,5 +222,15 @@ def health(deep: bool = False) -> dict:
         "status": "ok",
         "service": settings.app_name,
         "environment": settings.environment,
+        "demo_mode": settings.demo_mode,
+        "configuration": {
+            "DEMO_MODE": settings.demo_mode,
+            "LLM": providers.get("llm", {}).get("status"),
+            "OCR": providers.get("ocr", {}).get("status"),
+            "ML": providers.get("ml", {}).get("provider"),
+            "EMBEDDING": settings.embedding_provider,
+            "EMBEDDING_MODEL": settings.embedding_model,
+            "KB_CHUNKS": providers.get("knowledge", {}).get("chunks", "0"),
+        },
         "providers": providers,
     }

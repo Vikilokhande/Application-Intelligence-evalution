@@ -72,12 +72,16 @@ export function Shell({
   page,
   onPageChange,
   children,
-  selectedTitle
+  selectedTitle,
+  userSession,
+  onLogout
 }: {
   page: PageKey;
   onPageChange: (page: PageKey) => void;
   children: ReactNode;
   selectedTitle?: string | null;
+  userSession?: { email: string; role: string } | null;
+  onLogout?: () => void;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
@@ -263,8 +267,6 @@ export function Shell({
                 <Menu size={20} />
               </button>
 
-
-
               <div>
                 <h1 className="text-xl font-bold text-[#0F172A] tracking-tight flex items-center gap-2">
                   {currentPageObj?.label}
@@ -275,10 +277,10 @@ export function Shell({
                 </div>
               </div>
 
-              {/* Portal Badge */}
-              <div className="hidden md:flex items-center gap-2 rounded-lg bg-slate-100 border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
-                <Building2 size={13} className="text-[#0F766E]" />
-                <span>Government Portal</span>
+              {/* User Role Badge */}
+              <div className="hidden md:flex items-center gap-2 rounded-lg bg-teal-50 border border-teal-200 px-3 py-1 text-xs font-bold text-[#0F766E]">
+                <UserCheck size={14} className="text-[#0F766E]" />
+                <span>{userSession?.role?.replaceAll("_", " ") || "AUTHORIZED REVIEWER"}</span>
               </div>
             </div>
 
@@ -294,22 +296,21 @@ export function Shell({
                 System Active
               </div>
 
-              {/* Login / Auth Portal Button */}
-              <button
-                onClick={() => onPageChange(page === "login" ? "dashboard" : "login")}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-bold transition shadow-sm ${
-                  page === "login"
-                    ? "border-[#0F766E] bg-[#0F766E] text-white"
-                    : "border-[#CBD5E1] bg-white text-[#475569] hover:border-[#0D9488] hover:bg-[#F0FDF4] hover:text-[#0F766E]"
-                }`}
-                title={page === "login" ? "Return to Dashboard" : "View Login Portal"}
-              >
-                <LogOut size={13} />
-                <span>{page === "login" ? "Dashboard" : "Log Out / Portal"}</span>
-              </button>
+              {/* Sign Out Button */}
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition shadow-sm"
+                  title="Sign out of review workspace"
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out</span>
+                </button>
+              )}
             </div>
           </div>
         </header>
+
 
 
 

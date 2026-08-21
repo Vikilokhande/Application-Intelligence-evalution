@@ -752,15 +752,19 @@ class ValidationService:
             if not any(term in lower for term in heading_terms):
                 continue
             values: list[str] = []
+            values.extend(match.strip() for match in re.findall(r"-\s+\*\*([^*]{2,80})\*\*", text))
             for line in text.splitlines():
                 clean = line.strip()
                 if not clean.startswith("-"):
                     continue
                 clean = clean.lstrip("- ").strip()
                 clean = re.sub(r"\*\*", "", clean)
-                clean = re.split(r"\s+[—-]\s+|\s+\(", clean, maxsplit=1)[0].strip()
+                clean = re.split(r"\s+[\u2014-]\s+|\s+\(", clean, maxsplit=1)[0].strip()
                 if 2 <= len(clean) <= 80:
                     values.append(clean)
+            if not values and "acceptable project categories" in lower:
+                possible = re.findall(r"-\s+([A-Za-z][A-Za-z &/-]{2,80})(?:\s+\(|\s+-|$)", text)
+                values.extend(item.strip() for item in possible)
             if values:
                 return sorted(set(values)), item
         return [], {}
