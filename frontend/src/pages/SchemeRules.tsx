@@ -103,7 +103,7 @@ export function SchemeRules({
 
       {/* Section 2: Interactive RAG Policy Console */}
       <SectionPanel title="Ask Scheme Knowledge Console (RAG Search)">
-        <KnowledgeSearch initialQuery={activeScheme?.name || "Environmental Clearance Guidelines"} />
+        <KnowledgeSearch initialQuery={activeScheme?.name || ""} />
       </SectionPanel>
 
       {/* Section 3: Rules Management Grid */}

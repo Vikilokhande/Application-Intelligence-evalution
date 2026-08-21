@@ -13,13 +13,13 @@ export function NewApplication({
 }) {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    applicant_name: "Riverbend Municipal Council",
-    organization_type: "Municipality",
-    project_title: "Canal Edge Urban Greening",
-    project_category: "Urban Greening",
-    project_cost: "4800000",
-    duration_months: "18",
-    environmental_benefit: "Native shade trees and runoff control for a dense urban canal corridor."
+    applicant_name: "",
+    organization_type: "",
+    project_title: "",
+    project_category: "",
+    project_cost: "",
+    duration_months: "",
+    environmental_benefit: ""
   });
   const [schemeId, setSchemeId] = useState("");
   const [files, setFiles] = useState<FileList | null>(null);
@@ -28,17 +28,24 @@ export function NewApplication({
     event.preventDefault();
     setBusy(true);
     try {
+      const formData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(form)) {
+        if (!value.trim()) continue;
+        formData[key] = value.trim();
+      }
+      if (form.project_cost.trim()) {
+        formData.project_cost = Number(form.project_cost);
+      }
+      if (form.duration_months.trim()) {
+        formData.duration_months = Number(form.duration_months);
+      }
       await onCreate(
         {
-          scheme_id: schemeId || schemes[0]?.id,
-          applicant_name: form.applicant_name,
-          project_title: form.project_title,
-          project_category: form.project_category,
-          form_data: {
-            ...form,
-            project_cost: Number(form.project_cost),
-            duration_months: Number(form.duration_months)
-          }
+          scheme_id: schemeId || undefined,
+          applicant_name: form.applicant_name.trim() || undefined,
+          project_title: form.project_title.trim() || undefined,
+          project_category: form.project_category.trim() || undefined,
+          form_data: formData
         },
         files
       );
@@ -58,7 +65,7 @@ export function NewApplication({
           <label className="block">
             <span className="field-label">Scheme</span>
             <select className="w-full" value={schemeId} onChange={(event) => setSchemeId(event.target.value)}>
-              <option value="">Default Scheme</option>
+              <option value="">Select scheme</option>
               {schemes.map((scheme) => (
                 <option key={scheme.id} value={scheme.id}>
                   {scheme.name}
@@ -83,7 +90,7 @@ export function NewApplication({
             <input className="w-full" value={form.project_category} onChange={(event) => update("project_category", event.target.value)} />
           </label>
           <label className="block">
-            <span className="field-label">Project Cost (₹)</span>
+            <span className="field-label">Project Cost (INR)</span>
             <input className="w-full" type="number" value={form.project_cost} onChange={(event) => update("project_cost", event.target.value)} />
           </label>
           <label className="block">

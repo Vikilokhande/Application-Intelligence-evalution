@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.analytics.service import analytics_service
 from app.audit.service import audit_service
 from app.core.exceptions import ApplicationError
+from app.core.security import UserContext, create_access_token, get_current_user
 from app.db.session import get_db
 from app.ingestion.file_store import file_storage_service
 from app.knowledge.service import knowledge_base
@@ -21,6 +23,7 @@ from app.models import (
     ModelPrediction,
     ReviewerAssignment,
     ReviewerDecision,
+    RuleResult,
     Scheme,
     SchemeRule,
     ValidationResult,
@@ -49,9 +52,31 @@ from app.schemas.application import (
 from app.services.processing import application_processing_service
 from app.services.seed import seed_default_data
 from app.workflow.graph import application_workflow_graph
+from app.validation.service import VALIDATION_VERSION, build_validation_summary
 
 
 router = APIRouter()
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+
+@router.post("/auth/token")
+def get_token(
+    user_id: str = "demo-reviewer",
+    role: str = "senior_reviewer",
+) -> dict[str, str]:
+    """
+    Issue a JWT for demo/development use.
+    In production with AUTH_ENABLED=true, integrate with your identity provider.
+    """
+    token = create_access_token(user_id=user_id, role=role)
+    return {"access_token": token, "token_type": "bearer", "user_id": user_id, "role": role}
+
+
+@router.get("/auth/me")
+def get_me(current_user: UserContext = Depends(get_current_user)) -> dict[str, str]:
+    return {"user_id": current_user.user_id, "role": current_user.role}
 
 
 @router.post("/applications", response_model=ApplicationSummary, status_code=status.HTTP_201_CREATED)
@@ -158,9 +183,55 @@ def get_status(application_id: str, db: Session = Depends(get_db)) -> dict[str, 
     }
 
 
-@router.get("/applications/{application_id}/validation", response_model=list[ValidationResultRead])
-def get_validation(application_id: str, db: Session = Depends(get_db)) -> list[ValidationResult]:
-    return db.scalars(select(ValidationResult).where(ValidationResult.application_id == application_id)).all()
+@router.get("/applications/{application_id}/validation")
+def get_validation(application_id: str, structured: bool = False, db: Session = Depends(get_db)) -> Any:
+    results = db.scalars(select(ValidationResult).where(ValidationResult.application_id == application_id)).all()
+    if not structured:
+        return [ValidationResultRead.model_validate(item) for item in results]
+    rule_results = db.scalars(select(RuleResult).where(RuleResult.application_id == application_id)).all()
+    summary = build_validation_summary(results)
+    return {
+        "application_id": application_id,
+        "overall_status": summary["overall_status"],
+        "summary": summary,
+        "deterministic_checks": [
+            ValidationResultRead.model_validate(item).model_dump()
+            for item in results
+            if (item.evidence or {}).get("validator") == "deterministic"
+        ],
+        "document_llm_checks": [
+            ValidationResultRead.model_validate(item).model_dump()
+            for item in results
+            if (item.evidence or {}).get("validator") == "llm"
+        ],
+        "rag_checks": [
+            ValidationResultRead.model_validate(item).model_dump()
+            for item in results
+            if (item.evidence or {}).get("validator") == "rag"
+        ],
+        "cross_document_checks": [
+            ValidationResultRead.model_validate(item).model_dump()
+            for item in results
+            if (item.evidence or {}).get("check_id", "").startswith("CROSS_DOCUMENT_")
+        ],
+        "rule_results": [
+            {
+                "rule_id": item.rule_id,
+                "rule_name": item.rule_name,
+                "result": item.result,
+                "expected_value": item.expected_value,
+                "actual_value": item.actual_value,
+                "reason": item.reason,
+                "evidence": item.evidence,
+                "severity": item.severity,
+                "created_at": item.created_at,
+            }
+            for item in rule_results
+        ],
+        "validation_confidence": summary["validation_confidence"],
+        "generated_at": datetime.now(timezone.utc),
+        "version": VALIDATION_VERSION,
+    }
 
 
 @router.get("/applications/{application_id}/score", response_model=PredictionRead | None)
@@ -409,6 +480,7 @@ def _application_detail(db: Session, application: Application) -> ApplicationDet
             "reviewer_role": latest_assignment.reviewer_role,
             "routing_reason": latest_assignment.routing_reason,
             "status": latest_assignment.status,
+            "policy_version": latest_assignment.policy_version,
             "assigned_at": latest_assignment.assigned_at,
         }
         if latest_assignment

@@ -1,14 +1,52 @@
+# ── Core Web Framework ────────────────────────────────────────────────────────
 fastapi>=0.136.0
 uvicorn[standard]>=0.38.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
 SQLAlchemy>=2.0.40
 alembic>=1.18.0
+pymysql>=1.1.0
+cryptography>=42.0.0
+
+# ── Data Validation ───────────────────────────────────────────────────────────
 pydantic>=2.13.0
 pydantic-settings>=2.12.0
+
+# ── File Upload ───────────────────────────────────────────────────────────────
 python-multipart>=0.0.20
-pymysql>=1.1.0
+
+# ── Document Parsing ─────────────────────────────────────────────────────────
+pypdf>=4.0.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+
+# ── OCR ───────────────────────────────────────────────────────────────────────
+# PyMuPDF renders PDF pages to images at 300 DPI without Poppler
+PyMuPDF>=1.24.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# ── Semantic Embeddings ───────────────────────────────────────────────────────
+# Required when EMBEDDING_PROVIDER=sentence_transformers (production default)
+sentence-transformers>=3.0.0
+
+# ── Vector Store / Knowledge Base ────────────────────────────────────────────
 chromadb>=1.5.0
+
+# ── LangChain / LangGraph ─────────────────────────────────────────────────────
 langchain>=1.2.0
 langgraph>=1.1.0
+
+# ── ML Scoring ────────────────────────────────────────────────────────────────
+xgboost>=2.0.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+pandas>=2.2.0
+
+# ── Security / Auth ───────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=9.0.0
 httpx>=0.28.0
-

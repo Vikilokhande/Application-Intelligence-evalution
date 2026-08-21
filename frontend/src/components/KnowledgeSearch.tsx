@@ -2,11 +2,12 @@ import { Search, BookOpen, Sparkles, Loader2, FileText } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { api } from "../services/api";
+import type { KnowledgeResult } from "../types/api";
 
-export function KnowledgeSearch({ initialQuery = "Environmental Impact Guidelines" }: { initialQuery?: string }) {
+export function KnowledgeSearch({ initialQuery = "" }: { initialQuery?: string }) {
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<Array<{ document: string; content: string; score?: number; source?: string }> | null>(null);
+  const [results, setResults] = useState<KnowledgeResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSearch(e: FormEvent) {
@@ -48,13 +49,13 @@ export function KnowledgeSearch({ initialQuery = "Environmental Impact Guideline
       {results && results.length > 0 && (
         <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E] flex items-center gap-1.5">
-            <Sparkles size={12} /> {results.length} Retreived Knowledge Passage(s)
+            <Sparkles size={12} /> {results.length} Retrieved Knowledge Passage(s)
           </div>
           {results.map((item, idx) => (
             <div key={idx} className="rounded-lg border border-[#E2E8F0] bg-white p-3 shadow-sm text-xs space-y-1">
               <div className="flex items-center justify-between font-bold text-[#0F172A] gap-2">
                 <span className="truncate flex items-center gap-1.5 text-xs">
-                  <FileText size={13} className="text-[#0F766E]" /> {item.document || item.source || `Knowledge Source #${idx + 1}`}
+                  <FileText size={13} className="text-[#0F766E]" /> {item.source || `Knowledge Source #${idx + 1}`}
                 </span>
                 {item.score != null && (
                   <span className="font-mono text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded">
@@ -62,8 +63,11 @@ export function KnowledgeSearch({ initialQuery = "Environmental Impact Guideline
                   </span>
                 )}
               </div>
+              <div className="text-[10px] uppercase tracking-wider text-[#64748B]">
+                {item.scheme || "scheme"} / {item.chunk_id || "chunk"}
+              </div>
               <p className="text-[#334155] leading-relaxed text-[11px] font-mono bg-[#F8FAFC] p-2 rounded border border-slate-100">
-                {item.content}
+                {item.text}
               </p>
             </div>
           ))}

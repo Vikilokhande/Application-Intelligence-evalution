@@ -10,6 +10,7 @@ class ApplicationProcessingState(TypedDict, total=False):
     rule_results: list[dict[str, Any]]
     features: dict[str, float]
     ml_prediction: dict[str, Any]
+    llm_reasoning: dict[str, Any]          # post-scoring LLM advisory reasoning
     explanations: dict[str, Any]
     evidence: list[dict[str, Any]]
     routing_result: dict[str, Any]
@@ -28,6 +29,7 @@ WORKFLOW_NODES = [
     "RULE_EVALUATION",
     "FEATURE_ENGINEERING",
     "ML_SCORING",
+    "LLM_REASONING",        # Post-scoring LLM advisory reasoning stage
     "EXPLAIN",
     "ROUTE",
     "HUMAN_REVIEW",
@@ -45,6 +47,7 @@ def initial_state(application_id: str, document_ids: list[str]) -> ApplicationPr
         "rule_results": [],
         "features": {},
         "ml_prediction": {},
+        "llm_reasoning": {},
         "explanations": {},
         "evidence": [],
         "routing_result": {},
@@ -53,4 +56,3 @@ def initial_state(application_id: str, document_ids: list[str]) -> ApplicationPr
         "errors": [],
         "current_node": "INGEST",
     }
-

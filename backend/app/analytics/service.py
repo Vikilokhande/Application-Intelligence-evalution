@@ -3,7 +3,7 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Application, ModelPrediction, ReviewerAssignment, ReviewerDecision, RuleResult, Scheme
+from app.models import Application, Document, ModelPrediction, ReviewerAssignment, ReviewerDecision, RuleResult, Scheme, ValidationResult
 
 
 class AnalyticsService:
@@ -11,6 +11,8 @@ class AnalyticsService:
         applications = db.scalars(select(Application)).all()
         decisions = db.scalars(select(ReviewerDecision)).all()
         assignments = db.scalars(select(ReviewerAssignment)).all()
+        documents = db.scalars(select(Document)).all()
+        validation_failures = db.scalars(select(ValidationResult).where(ValidationResult.status == "FAIL")).all()
         predictions = db.scalars(select(ModelPrediction)).all()
         failed_rules = db.scalars(select(RuleResult).where(RuleResult.result == "FAIL")).all()
         scheme_names = dict(db.execute(select(Scheme.id, Scheme.name)).all())
@@ -48,6 +50,13 @@ class AnalyticsService:
             "rule_failure_frequency": dict(Counter(rule.rule_id for rule in failed_rules)),
             "suspicious_application_count": suspicious_count,
             "scheme_statistics": dict(Counter(scheme_names.get(app.scheme_id, "Unassigned") for app in applications)),
+            "document_processing_statistics": dict(Counter(document.processing_status for document in documents)),
+            "ocr_usage": dict(Counter(document.ocr_status or "not_required" for document in documents)),
+            "llm_usage": dict(Counter((document.metadata_json or {}).get("llm_status", "not_attempted") for document in documents)),
+            "routing_distribution": dict(Counter(assignment.status for assignment in assignments)),
+            "validation_failure_frequency": dict(
+                Counter(result.validation_type for result in validation_failures)
+            ),
         }
 
     def _score_distribution(self, predictions: list[ModelPrediction]) -> dict[str, int]:

@@ -16,10 +16,10 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
               <h1 className="text-xl font-extrabold text-[#0F172A] tracking-tight">
                 Governance Analytics & Operational Performance
               </h1>
-              <span className="ai-boundary-badge">✦ Directorate Analytics</span>
+              <span className="ai-boundary-badge">Directorate Analytics</span>
             </div>
             <p className="mt-1 text-xs text-[#475569]">
-              Directorate of Environment & Climate Change • Real-time throughput, risk distribution, rule failure frequency & reviewer performance.
+              Directorate of Environment & Climate Change - Real-time throughput, risk distribution, rule failure frequency & reviewer performance.
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-3.5 py-2 shadow-sm">
@@ -45,6 +45,11 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
         <Distribution title="Scheme-wise Application Counts" data={overview?.scheme_statistics ?? {}} />
         <Distribution title="Decision Breakdown" data={overview?.decision_distribution ?? {}} />
         <Distribution title="Reviewer Workload Distribution" data={overview?.reviewer_workload ?? {}} />
+        <Distribution title="Document Processing Statistics" data={overview?.document_processing_statistics ?? {}} />
+        <Distribution title="OCR Usage" data={overview?.ocr_usage ?? {}} />
+        <Distribution title="LLM Extraction Usage" data={overview?.llm_usage ?? {}} />
+        <Distribution title="Routing Status Distribution" data={overview?.routing_distribution ?? {}} />
+        <Distribution title="Validation Failure Frequency" data={overview?.validation_failure_frequency ?? {}} />
       </div>
 
       {/* Reviewer Performance Matrix Table */}

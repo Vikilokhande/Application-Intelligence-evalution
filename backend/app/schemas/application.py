@@ -47,6 +47,11 @@ class DocumentRead(BaseModel):
     validation_status: str
     checksum: str
     metadata_json: dict[str, Any]
+    classification_confidence: float | None = None
+    classification_provider: str | None = None
+    ocr_provider: str | None = None
+    ocr_confidence: float | None = None
+    ocr_status: str | None = None
 
 
 class ValidationResultRead(BaseModel):
@@ -104,6 +109,9 @@ class PredictionRead(BaseModel):
     prediction_class: str
     feature_contributions: dict[str, Any]
     status: str
+    feature_version: str
+    policy_version: str
+    provider: str
     created_at: datetime
 
 
@@ -212,3 +220,8 @@ class AnalyticsOverview(BaseModel):
     rule_failure_frequency: dict[str, int]
     suspicious_application_count: int
     scheme_statistics: dict[str, int]
+    document_processing_statistics: dict[str, int] = Field(default_factory=dict)
+    ocr_usage: dict[str, int] = Field(default_factory=dict)
+    llm_usage: dict[str, int] = Field(default_factory=dict)
+    routing_distribution: dict[str, int] = Field(default_factory=dict)
+    validation_failure_frequency: dict[str, int] = Field(default_factory=dict)

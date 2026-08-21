@@ -1,9 +1,11 @@
 import type {
+  AuthTokenResponse,
   AnalyticsOverview,
   ApplicationDetail,
   ApplicationSummary,
   EvidenceRead,
   FeedbackRead,
+  KnowledgeResult,
   PredictionRead,
   SchemeRead,
   SchemeRule,
@@ -12,11 +14,30 @@ import type {
 } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+const TOKEN_STORAGE_KEY = "application_intelligence_token";
+
+let authToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+
+function setAuthToken(token: string | null) {
+  authToken = token;
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (authToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${authToken}`);
+  }
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
-    ...init
+    ...init,
+    headers
   });
   if (!response.ok) {
     const error = await response.text();
@@ -26,6 +47,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  setAuthToken,
+  getToken: async (userId: string, role: string) => {
+    const token = await request<AuthTokenResponse>(
+      `/auth/token?user_id=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}`,
+      { method: "POST" }
+    );
+    setAuthToken(token.access_token);
+    return token;
+  },
+  getCurrentUser: () => request<{ user_id: string; role: string }>("/auth/me"),
   listApplications: () => request<ApplicationSummary[]>("/applications"),
   createApplication: (payload: Record<string, unknown>) =>
     request<ApplicationSummary>("/applications", { method: "POST", body: JSON.stringify(payload) }),
@@ -61,7 +92,7 @@ export const api = {
   createRule: (schemeId: string, payload: Record<string, unknown>) =>
     request<SchemeRule>(`/schemes/${schemeId}/rules`, { method: "POST", body: JSON.stringify(payload) }),
   searchKnowledge: (query: string) =>
-    request<Array<{ document: string; content: string; score?: number; source?: string }>>(
+    request<KnowledgeResult[]>(
       `/knowledge/search?q=${encodeURIComponent(query)}`
     )
 };

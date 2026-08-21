@@ -1,7 +1,17 @@
+"""
+tests/test_units.py
+====================
+
+Unit tests for individual services.
+
+Uses test-only mock providers from tests/fixtures/mock_providers.py.
+Does NOT test production LLM/OCR providers (requires real infrastructure).
+"""
+
 from sqlalchemy import select
 
 from app.features.service import feature_engineering_service
-from app.ml.scoring import MockScoringService
+from app.ml.scoring import BaselineScoringService, XGBoostScoringService
 from app.models import Application, ModelPrediction, RuleResult, Scheme, ValidationResult
 from app.routing.service import routing_service
 from app.rules.engine import rule_engine
@@ -46,23 +56,48 @@ def test_feature_engineering_counts_completeness_and_contradictions():
     validation_results = [
         ValidationResult(validation_type="REQUIRED_FIELD", status="PASS", message="ok", severity="INFO"),
         ValidationResult(validation_type="REQUIRED_FIELD", status="FAIL", message="missing", severity="ERROR"),
-        ValidationResult(validation_type="REQUIRED_DOCUMENT", status="FAIL", message="missing", severity="ERROR", evidence={"required": ["A", "B"], "missing": ["B"]}),
-        ValidationResult(validation_type="CROSS_DOCUMENT_CONSISTENCY", status="FAIL", message="contradiction", severity="ERROR"),
-        ValidationResult(validation_type="SUSPICIOUS_INDICATOR", status="WARN", message="risk", severity="WARNING", evidence={"indicators": ["Low extraction confidence"]}),
+        ValidationResult(
+            validation_type="REQUIRED_DOCUMENT",
+            status="FAIL",
+            message="missing",
+            severity="ERROR",
+            evidence={"required": ["A", "B"], "missing": ["B"]},
+        ),
+        ValidationResult(
+            validation_type="CROSS_DOCUMENT_CONSISTENCY",
+            status="FAIL",
+            message="contradiction",
+            severity="ERROR",
+        ),
+        ValidationResult(
+            validation_type="SUSPICIOUS_INDICATOR",
+            status="WARN",
+            message="risk",
+            severity="WARNING",
+            evidence={"indicators": ["Low extraction confidence"]},
+        ),
     ]
     rule_results = [
         RuleResult(rule_id="R1", rule_name="Rule 1", result="PASS", reason="ok"),
         RuleResult(rule_id="R2", rule_name="Rule 2", result="FAIL", reason="bad"),
     ]
-    profile = {"extraction_metadata": {"average_confidence": 0.75}, "environmental_attributes": {"benefit": {"selected_value": "Trees"}}}
+    profile = {
+        "extraction_metadata": {"average_confidence": 0.75},
+        "environmental_attributes": {"benefit": {"selected_value": "Trees"}},
+    }
     features = feature_engineering_service.to_feature_dict(profile, validation_results, rule_results)
     assert features["required_field_completeness"] == 0.5
     assert features["document_completeness"] == 0.5
     assert features["contradiction_count"] == 1.0
 
 
-def test_mock_scoring_is_labeled_development_model():
-    result = MockScoringService().score(
+def test_baseline_scoring_is_labeled_development_model():
+    """
+    BaselineScoringService is the explicit development-mode scorer.
+    It must return status='GENERATED_DEVELOPMENT_MODEL' so results
+    are never confused with real XGBoost predictions.
+    """
+    result = BaselineScoringService().score(
         {
             "document_completeness": 1,
             "required_field_completeness": 1,
@@ -78,12 +113,24 @@ def test_mock_scoring_is_labeled_development_model():
     )
     assert result["status"] == "GENERATED_DEVELOPMENT_MODEL"
     assert result["prediction_class"] == "LOW_RISK"
+    assert result["provider"] == "baseline"
+
+
+def test_xgboost_scorer_raises_model_unavailable_when_no_model():
+    """XGBoostScoringService must raise ModelUnavailableError if model file absent."""
+    from app.core.exceptions import ModelUnavailableError
+    scorer = XGBoostScoringService(model_path="/nonexistent/model.ubj")
+    try:
+        scorer.score({"document_completeness": 1.0})
+        assert False, "Should have raised ModelUnavailableError"
+    except ModelUnavailableError:
+        pass
 
 
 def test_routing_sends_medium_risk_to_expert_review():
     prediction = ModelPrediction(
         application_id="app",
-        model_name="mock",
+        model_name="baseline",
         risk_score=45,
         quality_score=60,
         confidence=0.8,
@@ -92,6 +139,24 @@ def test_routing_sends_medium_risk_to_expert_review():
     route = routing_service.route_dict(prediction, {"contradiction_count": 1}, failed_required_documents=False)
     assert route["recommendation"] == "EXPERT_REVIEW"
     assert route["reviewer_role"] == "expert_reviewer"
+    assert "policy_version" in route
+
+
+def test_routing_respects_config_thresholds():
+    """Routing reads thresholds from settings, not hardcoded values."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    # Risk exactly at senior threshold should route to senior review
+    prediction = ModelPrediction(
+        application_id="app",
+        model_name="baseline",
+        risk_score=settings.routing_senior_risk_threshold,
+        confidence=0.9,
+        prediction_class="HIGH_RISK",
+    )
+    route = routing_service.route_dict(prediction, {}, failed_required_documents=False)
+    assert route["recommendation"] == "SENIOR_REVIEW"
 
 
 def test_langgraph_workflow_skeleton_is_ordered_and_available():
@@ -101,3 +166,18 @@ def test_langgraph_workflow_skeleton_is_ordered_and_available():
     assert "HUMAN_REVIEW" in application_workflow_graph.nodes()
     assert isinstance(application_workflow_graph.is_available(), bool)
 
+
+def test_suspicious_cost_threshold_from_config():
+    """ValidationService reads suspicious_cost_threshold from settings."""
+    from app.core.config import get_settings
+    from app.validation.service import ValidationService
+
+    settings = get_settings()
+    svc = ValidationService()
+    profile = {
+        "financial": {"project_cost": {"selected_value": settings.suspicious_cost_threshold + 1}},
+        "extraction_metadata": {"average_confidence": 0.9},
+    }
+    result = svc._suspicious_indicators("test-app", profile)
+    assert result.status == "WARN"
+    assert any("High claimed project cost" in indicator for indicator in result.evidence.get("indicators", []))

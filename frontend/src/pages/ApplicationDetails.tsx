@@ -261,7 +261,7 @@ export function ApplicationDetails({
                 <div className="flex items-center gap-2 text-xs font-bold text-[#0F172A] uppercase tracking-wider">
                   <BookOpen size={15} className="text-[#0F766E]" /> Policy RAG Knowledge Base
                 </div>
-                <KnowledgeSearch initialQuery={detail.project_category || "Environmental Clearance Guidelines"} />
+                <KnowledgeSearch initialQuery={detail.project_category || ""} />
               </div>
             </div>
           </SectionPanel>

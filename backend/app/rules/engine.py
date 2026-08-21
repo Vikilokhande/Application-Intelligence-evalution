@@ -26,11 +26,13 @@ class RuleEngine:
         documents = db.scalars(select(Document).where(Document.application_id == application.id)).all()
         results = [self._evaluate_rule(application.id, rule, profile, documents) for rule in rules]
         db.add_all(results)
+        pass_count = sum(1 for r in results if r.result == "PASS")
+        fail_count = sum(1 for r in results if r.result == "FAIL")
         audit_service.record(
             db,
             "rule_executed",
             application_id=application.id,
-            payload={"rules": len(results), "failures": sum(1 for item in results if item.result == "FAIL")},
+            payload={"rules": len(results), "passed": pass_count, "failures": fail_count},
         )
         return results
 
@@ -44,6 +46,8 @@ class RuleEngine:
         try:
             if rule.rule_type == "max_value":
                 return self._max_value(application_id, rule, profile)
+            if rule.rule_type == "min_value":
+                return self._min_value(application_id, rule, profile)
             if rule.rule_type == "in_set":
                 return self._in_set(application_id, rule, profile)
             if rule.rule_type == "required_documents":
@@ -52,6 +56,10 @@ class RuleEngine:
                 return self._required_field(application_id, rule, profile)
             if rule.rule_type == "max_duration":
                 return self._max_value(application_id, rule, profile)
+            if rule.rule_type == "min_duration":
+                return self._min_value(application_id, rule, profile)
+            if rule.rule_type == "boolean":
+                return self._boolean(application_id, rule, profile)
             return self._unknown(application_id, rule)
         except Exception as exc:  # noqa: BLE001
             return self._result(
@@ -106,6 +114,38 @@ class RuleEngine:
             {"present_documents": sorted(present), "missing_documents": missing},
             "Rule passed." if not missing else f"Missing required documents: {', '.join(missing)}.",
             {"document_types": sorted(present)},
+        )
+
+    def _min_value(self, application_id: str, rule: SchemeRule, profile: dict[str, Any]) -> RuleResult:
+        field = rule.condition["field"]
+        minimum = float(rule.condition["min"])
+        actual = get_profile_value(profile, field)
+        passed = actual is not None and float(actual) >= minimum
+        return self._result(
+            application_id,
+            rule,
+            "PASS" if passed else "FAIL",
+            {"field": field, "operator": ">=", "value": minimum},
+            {"field": field, "value": actual},
+            "Rule passed." if passed else f"{field} is below the configured scheme minimum.",
+            {"field": field},
+        )
+
+    def _boolean(self, application_id: str, rule: SchemeRule, profile: dict[str, Any]) -> RuleResult:
+        field = rule.condition["field"]
+        expected = bool(rule.condition.get("expected", True))
+        actual = get_profile_value(profile, field)
+        # Treat None / empty / 0 / False as falsy
+        actual_bool = bool(actual) if actual is not None else False
+        passed = actual_bool == expected
+        return self._result(
+            application_id,
+            rule,
+            "PASS" if passed else "FAIL",
+            {"field": field, "expected": expected},
+            {"field": field, "value": actual},
+            "Rule passed." if passed else f"{field} does not meet the boolean requirement.",
+            {"field": field},
         )
 
     def _required_field(self, application_id: str, rule: SchemeRule, profile: dict[str, Any]) -> RuleResult:

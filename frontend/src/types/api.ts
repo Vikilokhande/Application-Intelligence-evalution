@@ -25,6 +25,11 @@ export interface DocumentRead {
   validation_status: string;
   checksum: string;
   metadata_json: Record<string, unknown>;
+  classification_confidence: number | null;
+  classification_provider: string | null;
+  ocr_provider: string | null;
+  ocr_confidence: number | null;
+  ocr_status: string | null;
 }
 
 export interface ValidationResult {
@@ -60,6 +65,9 @@ export interface PredictionRead {
   prediction_class: string;
   feature_contributions: Record<string, number>;
   status: string;
+  feature_version: string;
+  policy_version: string;
+  provider: string;
   created_at: string;
 }
 
@@ -137,10 +145,30 @@ export interface AnalyticsOverview {
   rule_failure_frequency: Record<string, number>;
   suspicious_application_count: number;
   scheme_statistics: Record<string, number>;
+  document_processing_statistics: Record<string, number>;
+  ocr_usage: Record<string, number>;
+  llm_usage: Record<string, number>;
+  routing_distribution: Record<string, number>;
+  validation_failure_frequency: Record<string, number>;
 }
 
 export interface WorkflowResponse {
   graph_available: boolean;
   nodes: string[];
   state: Record<string, unknown>;
+}
+
+export interface KnowledgeResult {
+  source: string;
+  scheme: string;
+  chunk_id: string;
+  score: number;
+  text: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  user_id: string;
+  role: string;
 }

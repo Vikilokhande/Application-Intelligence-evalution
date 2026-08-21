@@ -1,0 +1,138 @@
+{
+  "version": "1.0",
+  "description": "Feature schema for XGBoost application risk scoring model",
+  "features": [
+    {
+      "name": "document_completeness",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Ratio of required documents present vs required",
+      "missing_strategy": "0.0",
+      "importance": "high"
+    },
+    {
+      "name": "required_field_completeness",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Ratio of required fields populated in normalized profile",
+      "missing_strategy": "0.0",
+      "importance": "high"
+    },
+    {
+      "name": "eligibility_pass_ratio",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Ratio of scheme eligibility rules passed",
+      "missing_strategy": "0.0",
+      "importance": "high"
+    },
+    {
+      "name": "budget_consistency",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "1.0 if no budget contradiction detected, 0.0 otherwise",
+      "missing_strategy": "1.0",
+      "importance": "high"
+    },
+    {
+      "name": "certificate_validity",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "1.0 if certificate authenticity check passed, 0.0 if warning",
+      "missing_strategy": "1.0",
+      "importance": "medium"
+    },
+    {
+      "name": "contradiction_count",
+      "type": "float",
+      "range": [0.0, 10.0],
+      "description": "Number of cross-document contradictions detected",
+      "missing_strategy": "0.0",
+      "importance": "high"
+    },
+    {
+      "name": "duplicate_similarity",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "1.0 if potential duplicate application detected",
+      "missing_strategy": "0.0",
+      "importance": "medium"
+    },
+    {
+      "name": "suspicious_indicator_count",
+      "type": "float",
+      "range": [0.0, 10.0],
+      "description": "Count of suspicious indicators (low confidence, high cost, etc.)",
+      "missing_strategy": "0.0",
+      "importance": "medium"
+    },
+    {
+      "name": "document_quality",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Overall document quality ratio from validation checks",
+      "missing_strategy": "0.5",
+      "importance": "medium"
+    },
+    {
+      "name": "proposal_quality",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Average of field completeness and extraction confidence",
+      "missing_strategy": "0.5",
+      "importance": "medium"
+    },
+    {
+      "name": "project_feasibility",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Average of rule pass ratio and contradiction absence",
+      "missing_strategy": "0.5",
+      "importance": "medium"
+    },
+    {
+      "name": "environmental_impact",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "0.7 if environmental benefit text present, 0.4 otherwise",
+      "missing_strategy": "0.4",
+      "importance": "low"
+    },
+    {
+      "name": "extraction_confidence",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Average extraction confidence from normalization service",
+      "missing_strategy": "0.5",
+      "importance": "high"
+    }
+  ],
+  "label": {
+    "name": "risk_class",
+    "type": "binary",
+    "values": {
+      "0": "LOW_RISK",
+      "1": "HIGH_RISK"
+    },
+    "description": "1 if application was ultimately rejected/flagged as high-risk, 0 otherwise"
+  },
+  "training_dataset_schema": {
+    "description": "Required columns in training CSV",
+    "columns": [
+      "document_completeness",
+      "required_field_completeness",
+      "eligibility_pass_ratio",
+      "budget_consistency",
+      "certificate_validity",
+      "contradiction_count",
+      "duplicate_similarity",
+      "suspicious_indicator_count",
+      "document_quality",
+      "proposal_quality",
+      "project_feasibility",
+      "environmental_impact",
+      "extraction_confidence",
+      "risk_class"
+    ]
+  }
+}

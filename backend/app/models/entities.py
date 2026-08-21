@@ -1,3 +1,17 @@
+"""
+app/models/entities.py
+=======================
+
+SQLAlchemy ORM entities for the Application Intelligence Platform.
+
+Fields added vs original:
+  Document: classification_confidence, classification_provider, ocr_provider, ocr_confidence, ocr_status
+  FeatureSet: feature_version
+  ModelPrediction: feature_version, policy_version, provider
+  ReviewerAssignment: policy_version
+  ExtractedData: provider default changed from 'mock_local_parser' to 'unset'
+"""
+
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -117,6 +131,15 @@ class Document(Base):
     checksum: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
+    # --- Classification provenance (added) ---
+    classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    classification_provider: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    # --- OCR provenance (added) ---
+    ocr_provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ocr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ocr_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
     application: Mapped[Application] = relationship("Application", back_populates="documents")
     extracted_data: Mapped[list["ExtractedData"]] = relationship("ExtractedData", back_populates="document")
 
@@ -130,7 +153,7 @@ class ExtractedData(Base):
     extraction_type: Mapped[str] = mapped_column(String(80), nullable=False)
     raw_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
-    provider: Mapped[str] = mapped_column(String(120), default="mock_local_parser")
+    provider: Mapped[str] = mapped_column(String(120), default="unset")
     status: Mapped[str] = mapped_column(String(80), default="EXTRACTED")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -192,6 +215,8 @@ class FeatureSet(Base):
     application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), index=True, nullable=False)
     features_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     trusted: Mapped[bool] = mapped_column(Boolean, default=True)
+    # --- Feature schema version (added) ---
+    feature_version: Mapped[str] = mapped_column(String(40), default="1.0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     application: Mapped[Application] = relationship("Application", back_populates="features")
@@ -203,13 +228,17 @@ class ModelPrediction(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), index=True, nullable=False)
     model_name: Mapped[str] = mapped_column(String(160), nullable=False)
-    model_version: Mapped[str] = mapped_column(String(80), default="development")
+    model_version: Mapped[str] = mapped_column(String(80), default="")
     quality_score: Mapped[float | None] = mapped_column(Float)
     risk_score: Mapped[float | None] = mapped_column(Float)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     prediction_class: Mapped[str] = mapped_column(String(80), default="UNAVAILABLE")
     feature_contributions: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    status: Mapped[str] = mapped_column(String(80), default="GENERATED")
+    status: Mapped[str] = mapped_column(String(200), default="GENERATED")
+    # --- Added fields ---
+    feature_version: Mapped[str] = mapped_column(String(40), default="1.0")
+    policy_version: Mapped[str] = mapped_column(String(40), default="")
+    provider: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     application: Mapped[Application] = relationship("Application", back_populates="predictions")
@@ -243,6 +272,8 @@ class ReviewerAssignment(Base):
     routing_reason: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(80), default="ASSIGNED")
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # --- Policy version (added) ---
+    policy_version: Mapped[str] = mapped_column(String(40), default="")
 
     application: Mapped[Application] = relationship("Application", back_populates="assignments")
     reviewer: Mapped[User | None] = relationship("User")
