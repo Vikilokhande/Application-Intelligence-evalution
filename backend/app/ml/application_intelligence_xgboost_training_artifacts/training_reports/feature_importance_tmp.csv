@@ -1,0 +1,14 @@
+feature,importance
+document_completeness,0.20358962
+required_field_completeness,0.14292926
+eligibility_pass_ratio,0.13121238
+document_quality,0.10662942
+certificate_validity,0.075104706
+project_feasibility,0.055918068
+budget_consistency,0.049655642
+contradiction_count,0.046149164
+extraction_confidence,0.045437366
+duplicate_similarity,0.039703064
+suspicious_indicator_count,0.039677434
+proposal_quality,0.034556564
+environmental_impact,0.029437397

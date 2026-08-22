@@ -256,7 +256,7 @@ export default function App() {
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
       {page === "details" && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
       {page === "validation" && <ValidationVerification detail={detail} />}
-      {page === "scoring" && <ScoringExplainability detail={detail} />}
+      {page === "scoring" && <ScoringExplainability detail={detail} workflow={workflow} />}
       {page === "review" && <ReviewerWorkspace detail={detail} onDecision={submitDecision} onFeedback={submitFeedback} busy={busy} />}
       {page === "audit" && <AuditTrail detail={detail} />}
       {page === "schemes" && <SchemeRules schemes={schemes} onCreateRule={createRule} onDeleteRule={deleteRule} />}

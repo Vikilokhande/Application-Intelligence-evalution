@@ -501,7 +501,7 @@ class DocumentIntelligenceService:
                 llm_result = llm.extract_structured(
                     text,
                     "ApplicationFields",
-                    correlation_id=document.application_id,
+                     correlation_id=document.application_id,
                 )
                 llm_fields = _parse_llm_extraction(llm_result, document)
                 extraction_method = "llm_primary"
@@ -573,7 +573,7 @@ class DocumentIntelligenceService:
             extraction_type="DOCUMENT_INTELLIGENCE",
             raw_data=raw_data,
             confidence=confidence,
-            provider="groq" if extraction_method == "llm_primary" else extraction_method,
+            provider="openrouter" if extraction_method == "llm_primary" else extraction_method,
             status="EXTRACTED",
         )
         db.add(extracted)
@@ -613,7 +613,7 @@ class DocumentIntelligenceService:
             result = llm.classify_document(text, document.filename, document.document_type or "UNKNOWN")
             doc_type = result.get("document_type", "SUPPORTING_DOCUMENT")
             meta = {
-                "classification_provider": result.get("provider", "groq"),
+                "classification_provider": result.get("provider", "openrouter"),
                 "classification_confidence": result.get("confidence", 0.5),
                 "classification_reason": result.get("reason", ""),
                 "classification_signals": result.get("signals", []),

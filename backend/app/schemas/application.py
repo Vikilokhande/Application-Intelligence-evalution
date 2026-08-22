@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 Decision = Literal["APPROVE", "REJECT", "REQUEST_CLARIFICATION", "OVERRIDE_AI_RECOMMENDATION"]
@@ -113,6 +113,16 @@ class PredictionRead(BaseModel):
     policy_version: str
     provider: str
     created_at: datetime
+
+    @computed_field
+    @property
+    def model_status(self) -> str:
+        """Derived: ML_READY | BASELINE_FALLBACK | UNAVAILABLE. Not stored in DB."""
+        if self.provider == "xgboost":
+            return "ML_READY"
+        if self.provider == "baseline":
+            return "BASELINE_FALLBACK"
+        return "UNAVAILABLE"
 
 
 class ApplicationDetail(ApplicationSummary):

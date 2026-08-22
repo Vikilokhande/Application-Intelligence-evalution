@@ -269,6 +269,15 @@ class ApplicationProcessingService:
                 recommendation=application.ai_recommendation or "UNKNOWN",
                 priority="HIGH" if (prediction.risk_score or 0) >= 70 else "MEDIUM",
             )
+            logger.info(
+                "[ROUTING] application=%s reviewer_role=%s recommendation=%s "
+                "risk_score=%s priority=%s",
+                application.id,
+                assignment.reviewer_role,
+                application.ai_recommendation or "UNKNOWN",
+                prediction.risk_score,
+                "HIGH" if (prediction.risk_score or 0) >= 70 else "MEDIUM",
+            )
 
             # ── Stage: HUMAN_REVIEW (checkpoint) ─────────────────────────────
             state["current_node"] = "HUMAN_REVIEW"
@@ -308,6 +317,20 @@ class ApplicationProcessingService:
                 application.id,
                 assignment.reviewer_role,
                 application.ai_recommendation,
+            )
+            logger.info(
+                "[HUMAN_REVIEW] application=%s final_authority=true "
+                "reviewer_role=%s ml_provider=%s prediction_class=%s",
+                application.id,
+                assignment.reviewer_role,
+                prediction.provider or "unknown",
+                prediction.prediction_class or "UNAVAILABLE",
+            )
+            logger.info(
+                "[EXPLAINABILITY] application=%s evidence_count=%d failed_rules=%d",
+                application.id,
+                len(state.get("evidence", [])),
+                len(explanation.get("failed_rules", [])),
             )
             db.commit()
             return state
@@ -356,6 +379,12 @@ class ApplicationProcessingService:
         }
 
     def _prediction_to_dict(self, item: ModelPrediction) -> dict[str, Any]:
+        provider = item.provider or "unknown"
+        model_status = (
+            "ML_READY" if provider == "xgboost"
+            else "BASELINE_FALLBACK" if provider == "baseline"
+            else "UNAVAILABLE"
+        )
         return {
             "model_name": item.model_name,
             "model_version": item.model_version,
@@ -365,7 +394,8 @@ class ApplicationProcessingService:
             "prediction_class": item.prediction_class,
             "feature_contributions": item.feature_contributions,
             "status": item.status,
-            "provider": item.provider,
+            "provider": provider,
+            "model_status": model_status,
         }
 
     def _evidence_to_dict(self, item: Evidence) -> dict[str, Any]:

@@ -530,7 +530,7 @@ Return only the summary text, no markdown."""
     ) -> None:
         if not api_key:
             from app.core.exceptions import LLMProviderError
-            raise LLMProviderError("API key is required for GroqLLMProvider.", provider="groq")
+            raise LLMProviderError("API key is required. Set OPENROUTER_API_KEY in .env.", provider="openrouter")
         self._api_key = api_key  # stored privately; never logged
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -539,48 +539,95 @@ Return only the summary text, no markdown."""
         self.max_tokens = max_tokens
         self.max_retries = max_retries
 
-    def _call_api(self, messages: list[dict[str, str]], json_mode: bool = False, correlation_id: str = "") -> str:
+    def _call_api(
+        self,
+        messages: list[dict[str, str]],
+        json_mode: bool = False,
+        correlation_id: str = "",
+        backoff_base: float = 3.0,
+    ) -> str:
+        """
+        Call the LLM API with bounded exponential backoff on 429 rate limits.
+
+        On 429: reads Retry-After header, waits, retries up to self.max_retries times.
+        On 401/403: breaks immediately (auth error, no point retrying).
+        On other errors: exponential backoff and retry.
+        After max_retries exhausted: raises LLMProviderError.
+        """
         from app.core.exceptions import LLMProviderError
 
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.info(
-                    "LLM call attempt=%d model=%s json_mode=%s corr=%s",
-                    attempt, self.model, json_mode, correlation_id or "-",
+                    "[LLM] model=%s attempt=%d/%d corr=%s",
+                    self.model, attempt, self.max_retries, correlation_id or "-",
                 )
                 content = self._call_via_openai_sdk(messages, json_mode)
-                logger.info("LLM call succeeded attempt=%d corr=%s", attempt, correlation_id or "-")
-                return content
-            except LLMProviderError as exc:
-                logger.warning("LLM error attempt=%d: %s", attempt, exc.message[:200])
-                last_error = exc
-                # Don't retry auth/config errors
-                if "401" in exc.message or "403" in exc.message or "400" in exc.message:
-                    break
-                retry_after = getattr(getattr(exc, "__cause__", None), "response", None)
-                retry_after_value = None
-                if retry_after is not None:
-                    retry_after_value = getattr(retry_after, "headers", {}).get("retry-after")
-                if retry_after_value:
-                    try:
-                        delay = min(30.0, float(retry_after_value))
-                    except ValueError:
-                        delay = min(30.0, 2.0 ** attempt)
-                else:
-                    delay = min(30.0, 2.0 ** attempt)
-                time.sleep(delay)
-            except Exception as exc:
-                logger.warning(
-                    "LLM call unexpected error attempt=%d error_type=%s error_message=%s corr=%s",
-                    attempt, type(exc).__name__, str(exc)[:200], correlation_id or "-",
+                logger.info(
+                    "[LLM] model=%s attempt=%d status=SUCCESS corr=%s",
+                    self.model, attempt, correlation_id or "-",
                 )
+                return content
+
+            except LLMProviderError as exc:
                 last_error = exc
-                time.sleep(min(30.0, 2.0 ** attempt))
+                msg = exc.message
+
+                # --- 401 / 403: auth errors — do NOT retry ---
+                if "401" in msg or "403" in msg:
+                    logger.error(
+                        "[LLM] model=%s attempt=%d status=AUTH_ERROR — stopping retries",
+                        self.model, attempt,
+                    )
+                    break
+
+                # --- 429: rate limit — read Retry-After if available ---
+                is_rate_limit = "429" in msg or "rate limit" in msg.lower() or "rate_limit" in msg.lower()
+                if is_rate_limit:
+                    # Try to extract Retry-After from the exception chain
+                    retry_after_secs: float | None = None
+                    cause = getattr(exc, "__cause__", None)
+                    response_obj = getattr(cause, "response", None)
+                    if response_obj is not None:
+                        header_val = getattr(response_obj, "headers", {}).get("retry-after")
+                        if header_val:
+                            try:
+                                retry_after_secs = float(header_val)
+                            except (ValueError, TypeError):
+                                pass
+
+                    delay = min(30.0, retry_after_secs if retry_after_secs else backoff_base * (2 ** (attempt - 1)))
+                    logger.warning(
+                        "[LLM] model=%s attempt=%d status=RATE_LIMITED retry_after=%.1fs",
+                        self.model, attempt, delay,
+                    )
+                    if attempt < self.max_retries:
+                        time.sleep(delay)
+                    continue
+
+                # --- Other errors: exponential backoff ---
+                delay = min(30.0, backoff_base * (2 ** (attempt - 1)))
+                logger.warning(
+                    "[LLM] model=%s attempt=%d status=ERROR delay=%.1fs error=%.150s",
+                    self.model, attempt, delay, msg,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(delay)
+
+            except Exception as exc:
+                last_error = exc
+                delay = min(30.0, backoff_base * (2 ** (attempt - 1)))
+                logger.warning(
+                    "[LLM] model=%s attempt=%d status=UNEXPECTED_ERROR delay=%.1fs type=%s",
+                    self.model, attempt, delay, type(exc).__name__,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(delay)
 
         raise LLMProviderError(
-            f"LLM call failed after {self.max_retries} attempts: {last_error}",
-            provider="groq",
+            f"LLM model '{self.model}' failed after {self.max_retries} attempt(s): {last_error}",
+            provider="openrouter",
         ) from last_error
 
     def _call_via_openai_sdk(self, messages: list[dict[str, str]], json_mode: bool = False) -> str:
@@ -593,11 +640,18 @@ Return only the summary text, no markdown."""
             return self._call_via_urllib(messages, json_mode)
 
         try:
+            # OpenRouter requires HTTP-Referer and X-Title headers for free-tier models
+            extra_headers: dict[str, str] = {}
+            if "openrouter.ai" in self.base_url:
+                extra_headers["HTTP-Referer"] = "https://localhost:5173"
+                extra_headers["X-Title"] = "Application Intelligence Platform"
+
             client = OpenAI(
                 api_key=self._api_key,
                 base_url=self.base_url,
                 timeout=self.timeout,
                 max_retries=0,  # We handle retries ourselves
+                default_headers=extra_headers if extra_headers else None,
             )
             kwargs: dict[str, Any] = {
                 "model": self.model,
@@ -606,18 +660,18 @@ Return only the summary text, no markdown."""
                 "max_tokens": self.max_tokens,
             }
             # Note: response_format=json_object is NOT set here because not all
-            # Groq-hosted models support it. JSON fidelity is enforced via prompt
-            # instructions, and robust extraction is done in callers.
+            # models support it. JSON fidelity is enforced via prompt instructions,
+            # and robust extraction is done in callers.
             response = client.chat.completions.create(**kwargs)
             return response.choices[0].message.content or ""
         except AuthenticationError as exc:
-            raise LLMProviderError(f"Authentication failed (401): {exc}", provider="groq") from exc
+            raise LLMProviderError(f"Authentication failed (401): {exc}", provider="openrouter") from exc
         except RateLimitError as exc:
-            raise LLMProviderError(f"Rate limit exceeded (429): {exc}", provider="groq") from exc
+            raise LLMProviderError(f"Rate limit exceeded (429): {exc}", provider="openrouter") from exc
         except APIError as exc:
-            raise LLMProviderError(f"API error ({exc.status_code}): {exc.message}", provider="groq") from exc
+            raise LLMProviderError(f"API error ({exc.status_code}): {exc.message}", provider="openrouter") from exc
         except Exception as exc:
-            raise LLMProviderError(f"OpenAI SDK error: {exc}", provider="groq") from exc
+            raise LLMProviderError(f"OpenAI SDK error: {exc}", provider="openrouter") from exc
 
     def _call_via_urllib(self, messages: list[dict[str, str]], json_mode: bool = False) -> str:
         """Fallback: raw urllib request (may be blocked by some CDN configurations)."""
@@ -639,6 +693,9 @@ Return only the summary text, no markdown."""
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                     "User-Agent": "ApplicationIntelligencePlatform/1.0",
+                    # OpenRouter required headers
+                    **({"HTTP-Referer": "https://localhost:5173", "X-Title": "Application Intelligence Platform"}
+                       if "openrouter.ai" in self.base_url else {}),
                 },
                 method="POST",
             )
@@ -647,9 +704,9 @@ Return only the summary text, no markdown."""
             return result["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="ignore")
-            raise LLMProviderError(f"HTTP {exc.code}: {err_body[:300]}", provider="groq") from exc
+            raise LLMProviderError(f"HTTP {exc.code}: {err_body[:300]}", provider="openrouter") from exc
         except Exception as exc:
-            raise LLMProviderError(f"urllib request failed: {exc}", provider="groq") from exc
+            raise LLMProviderError(f"urllib request failed: {exc}", provider="openrouter") from exc
 
     @staticmethod
     def _extract_json_from_text(text: str) -> dict[str, Any]:
@@ -814,6 +871,7 @@ class LocalFallbackEmbeddingProvider(EmbeddingProvider):
 def get_llm_provider(settings: Any | None = None) -> LLMProvider:
     """
     Return the configured production LLM provider.
+    Supports: openai_compatible, openrouter, groq (legacy alias).
     Raises ConfigurationError if credentials are missing in non-demo mode.
     """
     from app.core.config import get_settings
@@ -821,14 +879,15 @@ def get_llm_provider(settings: Any | None = None) -> LLMProvider:
 
     s = settings or get_settings()
 
-    if s.llm_provider == "groq" or s.llm_provider == "openai_compatible":
+    # Accept openrouter, openai_compatible, and groq (legacy) — all use GroqLLMProvider
+    # because it's a generic OpenAI-compatible client with optional headers.
+    if s.llm_provider in ("groq", "openai_compatible", "openrouter"):
         if not s.llm_api_key:
             if s.demo_mode:
-                # In demo mode, return a passthrough provider that raises on actual calls
                 return _UnconfiguredLLMProvider(s.llm_provider)
             raise ConfigurationError(
-                f"LLM_API_KEY is required when LLM_PROVIDER='{s.llm_provider}' "
-                "and DEMO_MODE=false. Set GROQ_API_KEY or QROQ_API_KEY."
+                f"OPENROUTER_API_KEY is required when LLM_PROVIDER='{s.llm_provider}' "
+                "and DEMO_MODE=false. Set OPENROUTER_API_KEY in your .env file."
             )
         return GroqLLMProvider(
             api_key=s.llm_api_key,
@@ -840,7 +899,7 @@ def get_llm_provider(settings: Any | None = None) -> LLMProvider:
             max_retries=s.llm_max_retries,
         )
 
-    raise ConfigurationError(f"Unsupported LLM_PROVIDER: '{s.llm_provider}'. Supported: groq, openai_compatible")
+    raise ConfigurationError(f"Unsupported LLM_PROVIDER: '{s.llm_provider}'. Supported: openrouter, openai_compatible")
 
 
 def get_ocr_provider(settings: Any | None = None) -> OCRProvider | None:
@@ -888,7 +947,7 @@ class _UnconfiguredLLMProvider(LLMProvider):
         from app.core.exceptions import LLMProviderError
         raise LLMProviderError(
             f"LLM provider '{self.provider}' is not configured (no API key). "
-            "Set LLM_API_KEY / GROQ_API_KEY in your .env file.",
+            "Set OPENROUTER_API_KEY in your .env file.",
             provider=self.provider,
         )
 

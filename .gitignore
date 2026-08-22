@@ -18,5 +18,7 @@ data/test_chroma/
 frontend/node_modules/
 frontend/dist/
 backend/.coverage
+data/startup_probe/
+*.db
 *.log
 Application-Intelligence-evalution/

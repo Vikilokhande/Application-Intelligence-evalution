@@ -31,17 +31,23 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     # ── LLM Provider ─────────────────────────────────────────────────────────
-    llm_provider: str = "groq"
-    llm_model: str = "openai/gpt-oss-20b"
-    llm_base_url: str = "https://api.groq.com/openai/v1"
-    # Primary key name (normalized); falls back to legacy QROQ_API_KEY
+    llm_provider: str = "openai_compatible"   # openai_compatible | openrouter | none
+    llm_model: str = "google/gemma-4-26b-a4b-it:free"   # primary model
+    llm_fallback_model: str = "openrouter/auto"          # fallback on 429/unavailable
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    # API key resolution order: OPENROUTER_API_KEY > GROQ_API_KEY > QROQ_API_KEY > LLM_API_KEY
     llm_api_key: str = ""
-    qroq_api_key: str = ""      # legacy env var support
-    groq_api_key: str = ""      # canonical env var support
+    qroq_api_key: str = ""       # legacy Groq env var (kept for backward compat)
+    groq_api_key: str = ""       # legacy Groq env var (kept for backward compat)
+    openrouter_api_key: str = "" # primary key — set OPENROUTER_API_KEY in .env
     llm_temperature: float = 0.0
-    llm_timeout: int = 60
+    llm_timeout: int = 90
     llm_max_tokens: int = 4096
-    llm_max_retries: int = 3
+    llm_max_retries: int = 2                 # retries per model before falling back
+    llm_retry_backoff_seconds: float = 3.0   # base backoff; doubles each retry, capped at 30s
+    # Reasoning model — used ONLY for post-XGBoost AI explanation call
+    # If this model fails, AI reasoning = UNAVAILABLE. XGBoost+RAG results preserved.
+    groq_reasoning_model: str = "google/gemma-4-26b-a4b-it:free"  # override via GROQ_REASONING_MODEL
 
     # ── OCR ───────────────────────────────────────────────────────────────────
     ocr_enabled: bool = True
@@ -59,10 +65,16 @@ class Settings(BaseSettings):
     embedding_base_url: str = ""
 
     # ── ML Scoring ───────────────────────────────────────────────────────────
-    ml_provider: str = "xgboost"             # xgboost | unavailable
-    ml_model_path: str = str(PROJECT_ROOT / "ml" / "models" / "model.ubj")
-    ml_feature_schema_path: str = str(PROJECT_ROOT / "ml" / "models" / "feature_schema.json")
-    ml_model_version: str = ""               # loaded from training_metadata at runtime
+    ml_provider: str = "xgboost"             # xgboost | unavailable | baseline
+    ml_model_path: str = str(
+        PROJECT_ROOT / "backend" / "app" / "ml"
+        / "application_intelligence_xgboost_training_artifacts" / "models" / "risk_classifier.ubj"
+    )
+    ml_feature_schema_path: str = str(
+        PROJECT_ROOT / "backend" / "app" / "ml"
+        / "application_intelligence_xgboost_training_artifacts" / "models" / "feature_schema.json"
+    )
+    ml_model_version: str = "1.0"            # matches trained model schema version
 
     # ── Validation Thresholds ─────────────────────────────────────────────────
     suspicious_cost_threshold: float = 10_000_000.0   # ₹1 crore
@@ -90,10 +102,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_api_key(self) -> "Settings":
-        """Normalise the Groq/QROQ API key from whichever env var is set."""
+        """Normalise API key — OpenRouter key takes priority, then Groq/QROQ fallbacks."""
         if not self.llm_api_key:
-            # Prefer the canonically named var, fall back to legacy typo var
-            self.llm_api_key = self.groq_api_key or self.qroq_api_key
+            # Prefer OpenRouter key if set, then canonical Groq key, then legacy typo var
+            self.llm_api_key = (
+                self.openrouter_api_key
+                or self.groq_api_key
+                or self.qroq_api_key
+            )
         return self
 
     @property
@@ -118,8 +134,9 @@ class Settings(BaseSettings):
         if self.llm_provider != "none" and not self.demo_mode:
             if not self.llm_api_key:
                 raise ConfigurationError(
-                    f"LLM_API_KEY (or QROQ_API_KEY / GROQ_API_KEY) is required when "
-                    f"LLM_PROVIDER='{self.llm_provider}' and DEMO_MODE=false."
+                    f"OPENROUTER_API_KEY is required when "
+                    f"LLM_PROVIDER='{self.llm_provider}' and DEMO_MODE=false. "
+                    "Set OPENROUTER_API_KEY in your .env file."
                 )
 
     def validate_ocr_configuration(self) -> None:

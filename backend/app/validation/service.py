@@ -168,13 +168,26 @@ class ValidationService:
 
         for result in results:
             db.add(result)
+            evidence_dict = result.evidence or {}
+            check_id = evidence_dict.get("check_id", result.validation_type)
+            validator = evidence_dict.get("validator", "deterministic")
+            confidence = float(evidence_dict.get("confidence", 1.0))
+            status_str = result.status
+
+            # Emit canonical [FIELD_VALIDATION] log for deterministic checks
+            if validator == "deterministic":
+                logger.info(
+                    "[FIELD_VALIDATION] application=%s check=%s status=%s confidence=%.3f",
+                    application.id, check_id, status_str, confidence,
+                )
+
             logger.info(
                 "[PIPELINE] application=%s stage=VALIDATE validator=%s check_id=%s status=%s confidence=%.3f",
                 application.id,
-                (result.evidence or {}).get("validator", "deterministic"),
-                (result.evidence or {}).get("check_id", result.validation_type),
+                validator,
+                check_id,
                 result.status,
-                float((result.evidence or {}).get("confidence", 1.0)),
+                confidence,
             )
             if result.status == "FAIL":
                 audit_service.record(
@@ -184,8 +197,8 @@ class ValidationService:
                     actor_id="SYSTEM",
                     payload={
                         "stage": "VALIDATE",
-                        "check_id": (result.evidence or {}).get("check_id", result.validation_type),
-                        "validator": (result.evidence or {}).get("validator", "deterministic"),
+                        "check_id": check_id,
+                        "validator": validator,
                         "severity": result.severity,
                         "version": VALIDATION_VERSION,
                     },
@@ -576,6 +589,16 @@ class ValidationService:
                 )
             ]
 
+        # Emit [RAG_EVIDENCE] log per retrieved chunk
+        for chunk in retrieved:
+            logger.info(
+                "[RAG_EVIDENCE] application=%s source=%s chunk=%s retrieval_confidence=%.3f",
+                application_id,
+                chunk.get("source", "unknown"),
+                chunk.get("chunk_id", ""),
+                self._source_confidence(chunk),
+            )
+
         cost_limit, cost_source = self._extract_cost_limit(retrieved)
         duration_limit, duration_source = self._extract_duration_limit(retrieved)
         allowed_orgs, org_source = self._extract_allowed_values(retrieved, ("eligible organization", "organization types"))
@@ -708,6 +731,21 @@ class ValidationService:
                 )
             )
 
+        # Emit [RAG_EVIDENCE] decision log for each check built from retrieved chunks
+        for result in results:
+            check_id = (result.evidence or {}).get("check_id", result.validation_type)
+            source = (result.evidence or {}).get("retrieved_source", "")
+            retrieval_conf = float((result.evidence or {}).get("relevance_score") or (result.evidence or {}).get("confidence") or 0.0)
+            if source or check_id.startswith("RAG_"):
+                logger.info(
+                    "[RAG_EVIDENCE] application=%s rule_id=%s source=%s decision=%s retrieval_confidence=%.3f",
+                    application_id,
+                    check_id,
+                    source or "knowledge_base",
+                    result.status,
+                    retrieval_conf,
+                )
+
         audit_service.record(
             db,
             "RAG_VALIDATION_COMPLETED",
@@ -817,6 +855,9 @@ class ValidationService:
         source: dict[str, Any],
         query: str,
     ) -> ValidationResult:
+        source_text = str(source.get("text", ""))[:500]
+        source_doc = source.get("source", "knowledge_base")
+        source_chunk = source.get("chunk_id", "")
         evidence = {
             "query": query,
             "field": field,
@@ -825,26 +866,49 @@ class ValidationService:
             "retrieved_limit": expected_max,
             "actual": actual,
             "actual_value": actual,
-            "retrieved_source": source.get("source"),
+            "retrieved_source": source_doc,
+            "knowledge_base_document": source_doc,
+            "knowledge_base_chunk": source_chunk,
+            "evidence_text": source_text,
             "relevance_score": source.get("score"),
             "extracted_guideline": {"maximum": expected_max},
+            "rule_id": validation_type,
             "knowledge_source": {
-                "source": source.get("source"),
+                "source": source_doc,
                 "scheme": source.get("scheme"),
-                "chunk_id": source.get("chunk_id"),
+                "chunk_id": source_chunk,
                 "score": source.get("score"),
-                "text_excerpt": str(source.get("text", ""))[:500],
+                "text_excerpt": source_text,
             },
             "terminology": "Potential policy inconsistency; requires reviewer verification.",
         }
+        if actual is None or str(actual).strip() == "":
+            # Field absent → NOT_VERIFIABLE, not WARN
+            return self._result(
+                application_id,
+                validation_type,
+                "NOT_VERIFIABLE",
+                (
+                    f"{field} is absent from extracted data; RAG limit check cannot proceed. "
+                    f"Scheme guideline (from {source_doc}) specifies maximum {expected_max}. "
+                    "Status: NOT_VERIFIABLE — required evidence unavailable."
+                ),
+                "WARNING",
+                evidence,
+                check_id=validation_type,
+                confidence=0.0,
+                expected={"field": field, "max": expected_max},
+                actual={"field": field, "value": None},
+                evidence_items=[self._knowledge_evidence_item(source)],
+            )
         try:
             actual_number = float(actual)
         except (TypeError, ValueError):
             return self._result(
                 application_id,
                 validation_type,
-                "WARN",
-                f"{field} could not be compared with the retrieved scheme guideline.",
+                "NOT_VERIFIABLE",
+                f"{field} value '{actual}' could not be parsed as a number; RAG comparison skipped.",
                 "WARNING",
                 evidence,
                 check_id=validation_type,
@@ -862,7 +926,7 @@ class ValidationService:
                 application_id,
                 validation_type,
                 "PASS",
-                pass_message,
+                f"{pass_message} (source: {source_doc}, limit: {expected_max})",
                 "INFO",
                 evidence,
                 check_id=validation_type,
@@ -877,8 +941,8 @@ class ValidationService:
                 application_id=application_id,
                 document_id=None,
                 finding_type=validation_type,
-                source=str(source.get("source") or "scheme_knowledge"),
-                locator=str(source.get("chunk_id") or "retrieved_chunk"),
+                source=source_doc,
+                locator=source_chunk,
                 field_name=field,
                 extracted_value=str(actual_number),
                 confidence=confidence,
@@ -889,7 +953,7 @@ class ValidationService:
             application_id,
             validation_type,
             "FAIL",
-            fail_message,
+            f"{fail_message} (actual: {actual_number}, limit: {expected_max}, source: {source_doc})",
             "ERROR",
             evidence,
             check_id=validation_type,
@@ -911,25 +975,39 @@ class ValidationService:
     ) -> ValidationResult:
         normalized_allowed = {value.casefold(): value for value in allowed_values}
         normalized_actual = str(actual or "").strip().casefold()
-        if not actual:
-            status = "NOT_CHECKED"
-            message = f"{field} is missing; RAG eligibility comparison could not run."
+        source_text = str(source.get("text", ""))[:400]
+        source_doc = source.get("source", "knowledge_base")
+        source_chunk = source.get("chunk_id", "")
+        if not actual or not str(actual).strip():
+            # Field absent → NOT_VERIFIABLE, not NOT_CHECKED
+            status = "NOT_VERIFIABLE"
+            message = (
+                f"{field} is absent from extracted data; RAG eligibility comparison cannot proceed. "
+                "Status: NOT_VERIFIABLE — required evidence unavailable."
+            )
             severity = "WARNING"
         elif normalized_actual in normalized_allowed:
             status = "PASS"
-            message = f"{field} matches retrieved scheme eligibility guidance."
+            message = f"{field} matches retrieved scheme eligibility guidance (source: {source_doc})."
             severity = "INFO"
         else:
             status = "FAIL"
-            message = f"{field} does not match retrieved scheme eligibility guidance."
+            message = (
+                f"{field} value '{actual}' does not match retrieved scheme eligibility guidance "
+                f"(allowed: {', '.join(allowed_values)}) — source: {source_doc}."
+            )
             severity = "ERROR"
         evidence = {
             "query": query,
-            "retrieved_source": source.get("source"),
+            "retrieved_source": source_doc,
+            "knowledge_base_document": source_doc,
+            "knowledge_base_chunk": source_chunk,
+            "evidence_text": source_text,
             "relevance_score": source.get("score"),
             "extracted_guideline": {"allowed_values": allowed_values},
             "applied_field": field,
             "actual_value": actual,
+            "rule_id": validation_type,
         }
         return self._result(
             application_id,
@@ -939,7 +1017,7 @@ class ValidationService:
             severity,
             evidence,
             check_id=validation_type,
-            confidence=self._source_confidence(source) if status != "NOT_CHECKED" else 0.0,
+            confidence=self._source_confidence(source) if status not in ("NOT_VERIFIABLE", "NOT_CHECKED") else 0.0,
             expected={"field": field, "allowed_values": allowed_values},
             actual={"field": field, "value": actual},
             evidence_items=[self._knowledge_evidence_item(source)],
@@ -964,14 +1042,27 @@ class ValidationService:
                 if item.get("document_id") and item.get("value") not in (None, "")
             ]
             if len(by_source) < 2:
+                # NOT_VERIFIABLE = evidence unavailable; NOT_CHECKED = deliberately skipped
+                status = "NOT_VERIFIABLE"
+                doc_count = len(by_source)
+                reason = (
+                    f"{profile_path} — only {doc_count} document-derived value(s) found; "
+                    "cross-document comparison requires at least 2 documents with the same field extracted."
+                    " Status: NOT_VERIFIABLE — evidence unavailable."
+                )
                 results.append(
                     self._result(
                         application_id,
                         "CROSS_DOCUMENT_CONSISTENCY",
-                        "NOT_CHECKED",
-                        f"{profile_path} did not have multiple document-derived values to compare.",
+                        "NOT_VERIFIABLE",
+                        reason,
                         "INFO",
-                        {"field": profile_path, "values": by_source},
+                        {
+                            "field": profile_path,
+                            "values": by_source,
+                            "doc_count": doc_count,
+                            "not_verifiable_reason": "Fewer than 2 documents contain this field — comparison not possible",
+                        },
                         check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
                         confidence=0.0,
                     )

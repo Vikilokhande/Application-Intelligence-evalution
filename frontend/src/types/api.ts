@@ -64,10 +64,14 @@ export interface PredictionRead {
   confidence: number;
   prediction_class: string;
   feature_contributions: Record<string, number>;
+  /** LOW_RISK / MEDIUM_RISK / HIGH_RISK class probabilities from XGBoost */
+  class_probabilities?: Record<string, number>;
   status: string;
   feature_version: string;
   policy_version: string;
   provider: string;
+  /** ML_READY | BASELINE_FALLBACK | UNAVAILABLE */
+  model_status?: string;
   created_at: string;
 }
 

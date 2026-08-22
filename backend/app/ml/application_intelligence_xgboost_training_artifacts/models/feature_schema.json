@@ -1,0 +1,55 @@
+{
+  "model_type": "application_intelligence_xgboost",
+  "version": "1.0",
+  "features": [
+    "document_completeness",
+    "required_field_completeness",
+    "eligibility_pass_ratio",
+    "budget_consistency",
+    "certificate_validity",
+    "contradiction_count",
+    "duplicate_similarity",
+    "suspicious_indicator_count",
+    "document_quality",
+    "proposal_quality",
+    "project_feasibility",
+    "environmental_impact",
+    "extraction_confidence"
+  ],
+  "feature_count": 13,
+  "feature_order_must_match_inference": true,
+  "outputs": {
+    "risk_class": {
+      "model": "model.ubj",
+      "mapping": {
+        "LOW": 0,
+        "MEDIUM": 1,
+        "HIGH": 2
+      },
+      "type": "classification"
+    },
+    "risk_score": {
+      "model": "risk_regressor.ubj",
+      "range": [
+        0,
+        100
+      ],
+      "type": "regression"
+    },
+    "quality_score": {
+      "model": "quality_regressor.ubj",
+      "range": [
+        0,
+        100
+      ],
+      "type": "regression"
+    },
+    "confidence": {
+      "source": "max(risk_class_predict_proba)",
+      "range": [
+        0,
+        1
+      ]
+    }
+  }
+}

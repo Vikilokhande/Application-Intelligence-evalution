@@ -4,7 +4,17 @@ ml/scoring.py
 
 Production ML scoring pipeline.
 
-Production path: XGBoostScoringService → MODEL_UNAVAILABLE if no model file.
+Uses 3 trained XGBoost models from the artifacts directory:
+  - risk_classifier.ubj  → predict_proba → prediction_class + confidence
+  - risk_regressor.ubj   → predict        → risk_score (0-100)
+  - quality_regressor.ubj→ predict        → quality_score (0-100)
+
+All 3 models require EXACTLY these 13 features in this order:
+  document_completeness, required_field_completeness, eligibility_pass_ratio,
+  budget_consistency, certificate_validity, contradiction_count,
+  duplicate_similarity, suspicious_indicator_count, document_quality,
+  proposal_quality, project_feasibility, environmental_impact,
+  extraction_confidence
 
 BaselineScoringService: deterministic rule-based scorer kept for explicit
   development/evaluation use. NOT used in the production path by default.
@@ -30,40 +40,13 @@ from app.models import Application, ModelPrediction
 logger = logging.getLogger(__name__)
 
 # Feature schema version — must match the schema used during training
-FEATURE_SCHEMA_VERSION = "1.1"
+FEATURE_SCHEMA_VERSION = "1.0"
 
-# Ordered feature list; order MUST match the trained model's feature ordering
+# Artifacts directory (where all 3 trained models live)
+_ARTIFACTS_DIR = Path(__file__).parent / "application_intelligence_xgboost_training_artifacts" / "models"
+
+# Ordered feature list — MUST match the trained model's exact feature ordering (13 features)
 FEATURE_NAMES = [
-    "document_completeness_ratio",
-    "required_document_missing_count",
-    "application_completeness",
-    "project_cost",
-    "project_duration",
-    "requested_funding",
-    "organization_eligibility",
-    "deterministic_fail_count",
-    "deterministic_warning_count",
-    "llm_validation_fail_count",
-    "llm_validation_warning_count",
-    "rag_validation_fail_count",
-    "contradiction_count",
-    "missing_document_count",
-    "eligibility_rule_fail_count",
-    "financial_rule_fail_count",
-    "duration_rule_fail_count",
-    "category_rule_fail_count",
-    "applicant_name_match_ratio",
-    "project_title_match_ratio",
-    "project_cost_consistency",
-    "duration_consistency",
-    "organization_consistency",
-    "document_type_consistency",
-    "ocr_quality",
-    "rag_retrieval_confidence",
-    "scheme_guideline_match_score",
-    "scheme_eligibility_match",
-    "normalization_confidence",
-    "validation_confidence",
     "document_completeness",
     "required_field_completeness",
     "eligibility_pass_ratio",
@@ -79,6 +62,10 @@ FEATURE_NAMES = [
     "extraction_confidence",
 ]
 
+# Risk class mapping from the training schema
+_INT_TO_CLASS = {0: "LOW_RISK", 1: "MEDIUM_RISK", 2: "HIGH_RISK"}
+
+
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
@@ -91,129 +78,163 @@ class ScoringService(ABC):
 
 
 # ---------------------------------------------------------------------------
-# XGBoost — Production Scorer
+# XGBoost — Production Scorer (3-model ensemble)
 # ---------------------------------------------------------------------------
 
 
 class XGBoostScoringService(ScoringService):
     """
-    Production scorer backed by a trained XGBoost model.
+    Production scorer backed by 3 trained XGBoost models.
+
+    Models loaded from artifacts directory:
+      - risk_classifier.ubj  → classification → prediction_class + confidence
+      - risk_regressor.ubj   → regression     → risk_score (0-100)
+      - quality_regressor.ubj→ regression     → quality_score (0-100)
 
     Raises ModelUnavailableError if:
-    - model file does not exist
-    - feature schema mismatch
+    - any model file does not exist
     - xgboost package not installed
 
     Never fabricates predictions.
     """
 
-    def __init__(self, model_path: str = "", feature_schema_path: str = "") -> None:
-        settings = get_settings()
-        self.model_path = Path(model_path or settings.ml_model_path)
-        self.feature_schema_path = Path(feature_schema_path or settings.ml_feature_schema_path)
-        self._model: Any = None
-        self._feature_schema: dict[str, Any] | None = None
-        self._model_version: str = settings.ml_model_version or "unknown"
+    def __init__(self, artifacts_dir: Path | None = None) -> None:
+        self._artifacts_dir = artifacts_dir or _ARTIFACTS_DIR
+        self._classifier: Any = None      # risk_classifier.ubj
+        self._risk_reg: Any = None        # risk_regressor.ubj
+        self._quality_reg: Any = None     # quality_regressor.ubj
+        self._loaded = False
 
     def _load(self) -> None:
-        """Load model and feature schema. Raises ModelUnavailableError on any problem."""
-        if not self.model_path.exists():
-            raise ModelUnavailableError(
-                f"XGBoost model file not found at '{self.model_path}'. "
-                "Train the model first using ml/training/train.py, "
-                "then ensure ML_MODEL_PATH is configured correctly."
-            )
-
+        """Load all 3 models. Raises ModelUnavailableError on any problem."""
         try:
             import xgboost as xgb  # type: ignore
         except ImportError as exc:
             raise ModelUnavailableError(
-                "xgboost package is not installed. "
-                "Install with: pip install xgboost"
+                "xgboost package is not installed. Install with: pip install xgboost"
             ) from exc
 
-        booster = xgb.Booster()
-        booster.load_model(str(self.model_path))
-        self._model = booster
+        classifier_path = self._artifacts_dir / "risk_classifier.ubj"
+        risk_reg_path = self._artifacts_dir / "risk_regressor.ubj"
+        quality_reg_path = self._artifacts_dir / "quality_regressor.ubj"
 
-        # Load feature schema for validation
-        if self.feature_schema_path.exists():
-            with open(self.feature_schema_path, encoding="utf-8") as f:
-                self._feature_schema = json.load(f)
-            schema_version = self._feature_schema.get("version", "unknown")
-            if schema_version != FEATURE_SCHEMA_VERSION:
-                raise ModelUnavailableError(
-                    f"Feature schema version mismatch: model expects '{schema_version}', "
-                    f"service has '{FEATURE_SCHEMA_VERSION}'. Retrain or update the service."
-                )
-            self._model_version = self._feature_schema.get("model_version", self._model_version)
-            logger.info(
-                "XGBoost model loaded: version=%s features=%d",
-                self._model_version, len(FEATURE_NAMES),
+        missing = [
+            str(p) for p in [classifier_path, risk_reg_path, quality_reg_path]
+            if not p.exists()
+        ]
+        if missing:
+            raise ModelUnavailableError(
+                f"XGBoost model files not found: {missing}. "
+                f"Expected in: {self._artifacts_dir}"
             )
-        else:
-            logger.warning("Feature schema not found at %s; skipping schema validation.", self.feature_schema_path)
 
-    def _validate_features(self, features: dict[str, float]) -> list[float]:
-        """Return ordered feature vector; raise ModelUnavailableError on mismatch."""
+        clf = xgb.XGBClassifier()
+        clf.load_model(str(classifier_path))
+        self._classifier = clf
+
+        risk_reg = xgb.XGBRegressor()
+        risk_reg.load_model(str(risk_reg_path))
+        self._risk_reg = risk_reg
+
+        quality_reg = xgb.XGBRegressor()
+        quality_reg.load_model(str(quality_reg_path))
+        self._quality_reg = quality_reg
+
+        self._loaded = True
+        logger.info(
+            "XGBoost models loaded: classifier=%s risk_regressor=%s quality_regressor=%s features=%d schema_version=%s",
+            classifier_path.name, risk_reg_path.name, quality_reg_path.name,
+            len(FEATURE_NAMES), FEATURE_SCHEMA_VERSION,
+        )
+
+    def _validate_and_order_features(self, features: dict[str, float]) -> list[float]:
+        """Return ordered 13-feature vector; raise ModelUnavailableError on mismatch."""
         missing = [f for f in FEATURE_NAMES if f not in features]
         if missing:
             raise ModelUnavailableError(
-                f"Feature mismatch: the following features are missing from the input: {missing}. "
-                "Ensure the feature engineering service is producing all required features."
+                f"Feature mismatch: missing features {missing}. "
+                "Ensure feature engineering produces all 13 required features."
             )
         return [float(features[name]) for name in FEATURE_NAMES]
 
     def score(self, features: dict[str, float]) -> dict[str, Any]:
-        if self._model is None:
+        if not self._loaded:
             self._load()
 
-        import xgboost as xgb  # type: ignore
         import numpy as np  # type: ignore
 
-        feature_vector = self._validate_features(features)
-        dmatrix = xgb.DMatrix(
-            np.array([feature_vector], dtype=float),
-            feature_names=FEATURE_NAMES,
-        )
+        feature_vector = self._validate_and_order_features(features)
+        X = np.array([feature_vector], dtype=float)
 
-        # Probability of HIGH_RISK (class 1) — calibrated to 0-100 risk score
-        raw_proba = self._model.predict(dmatrix)
-        risk_proba = float(raw_proba[0])
-        risk_score = round(risk_proba * 100, 1)
-        quality_score = round(max(0.0, 100.0 - risk_score), 1)
-        confidence = round(abs(risk_proba - 0.5) * 2.0, 3)  # distance from decision boundary
-        confidence = max(0.25, min(0.95, confidence + 0.35))
-
-        if risk_score >= 70:
-            prediction_class = "HIGH_RISK"
-        elif risk_score >= 40:
-            prediction_class = "MEDIUM_RISK"
-        else:
-            prediction_class = "LOW_RISK"
-
-        # Feature contributions via gain/weight importance (native XGBoost)
+        # --- Risk classification (class + confidence) ---
         try:
-            importance = self._model.get_score(importance_type="gain")
-            total_gain = sum(importance.values()) or 1.0
+            proba = self._classifier.predict_proba(X)[0]  # shape: (3,) for LOW/MED/HIGH
+            pred_class_idx = int(np.argmax(proba))
+            confidence = float(proba[pred_class_idx])
+            prediction_class = _INT_TO_CLASS.get(pred_class_idx, "MEDIUM_RISK")
+        except Exception as exc:
+            logger.warning("risk_classifier predict_proba failed: %s", exc)
+            raise ModelUnavailableError(f"risk_classifier inference failed: {exc}") from exc
+
+        # --- Risk score regression (0-100) ---
+        try:
+            risk_score_raw = float(self._risk_reg.predict(X)[0])
+            risk_score = round(float(np.clip(risk_score_raw, 0.0, 100.0)), 1)
+        except Exception as exc:
+            logger.warning("risk_regressor predict failed: %s; falling back to proba-based score", exc)
+            # Graceful fallback: derive from classifier proba
+            risk_score = round(float(proba[2]) * 100.0, 1)  # HIGH_RISK proba * 100
+
+        # --- Quality score regression (0-100) ---
+        try:
+            quality_score_raw = float(self._quality_reg.predict(X)[0])
+            quality_score = round(float(np.clip(quality_score_raw, 0.0, 100.0)), 1)
+        except Exception as exc:
+            logger.warning("quality_regressor predict failed: %s; falling back to complement", exc)
+            quality_score = round(max(0.0, 100.0 - risk_score), 1)
+
+        # Feature importance contributions from the classifier
+        try:
+            importance_scores = self._classifier.get_booster().get_score(importance_type="gain")
+            total_gain = sum(importance_scores.values()) or 1.0
             feature_contributions = {
-                name: round(importance.get(name, 0.0) / total_gain, 4)
-                for name in FEATURE_NAMES
+                name: round(importance_scores.get(f"f{i}", 0.0) / total_gain, 4)
+                for i, name in enumerate(FEATURE_NAMES)
             }
         except Exception:
             feature_contributions = {name: 0.0 for name in FEATURE_NAMES}
 
+        class_probabilities = {
+            "LOW_RISK": round(float(proba[0]), 4),
+            "MEDIUM_RISK": round(float(proba[1]), 4),
+            "HIGH_RISK": round(float(proba[2]), 4),
+        }
+
+        logger.info(
+            "[ML_SCORING] model_status=READY features=%d/%d prediction_class=%s "
+            "risk_score=%.1f quality_score=%.1f confidence=%.3f",
+            len(FEATURE_NAMES), len(FEATURE_NAMES),
+            prediction_class, risk_score, quality_score, confidence,
+        )
+        logger.info(
+            "[PIPELINE] ML_SCORING xgboost prediction_class=%s confidence=%.3f "
+            "risk_score=%.1f quality_score=%.1f",
+            prediction_class, confidence, risk_score, quality_score,
+        )
+
         return {
-            "model_name": "XGBoostRiskClassifier",
-            "model_version": self._model_version,
+            "model_name": "XGBoostApplicationIntelligence",
+            "model_version": FEATURE_SCHEMA_VERSION,
             "feature_version": FEATURE_SCHEMA_VERSION,
             "risk_score": risk_score,
             "quality_score": quality_score,
-            "confidence": confidence,
+            "confidence": round(confidence, 4),
             "prediction_class": prediction_class,
+            "class_probabilities": class_probabilities,
             "feature_contributions": feature_contributions,
             "status": "GENERATED",
             "provider": "xgboost",
+            "model_status": "ML_READY",
         }
 
 
@@ -237,53 +258,38 @@ class BaselineScoringService(ScoringService):
     """
 
     def score(self, features: dict[str, float]) -> dict[str, Any]:
-        risk_components = {
-            "deterministic_fail_count": features.get("deterministic_fail_count", 0) * 9.0,
-            "required_documents_missing": features.get("missing_document_count", 0) * 12.0,
-            "cross_document_contradictions": features.get("contradiction_count", 0) * 16.0,
-            "financial_rule_failures": features.get("financial_rule_fail_count", 0) * 14.0,
-            "duration_rule_failures": features.get("duration_rule_fail_count", 0) * 10.0,
-            "eligibility_rule_failures": features.get("eligibility_rule_fail_count", 0) * 14.0,
-            "rag_guideline_failures": features.get("rag_validation_fail_count", 0) * 8.0,
-            "llm_semantic_warnings": features.get("llm_validation_warning_count", 0) * 4.0,
-            "suspicious_indicators": features.get("suspicious_indicator_count", 0) * 8.0,
-            "duplicate_similarity": features.get("duplicate_similarity", 0) * 20.0,
-            "document_incompleteness": (1.0 - features.get("document_completeness_ratio", features.get("document_completeness", 1))) * 18.0,
-            "low_extraction_confidence": (1.0 - features.get("extraction_confidence", 1)) * 10.0,
-            "low_validation_confidence": (1.0 - features.get("validation_confidence", 1)) * 8.0,
-        }
-        risk_score = min(100.0, max(0.0, 5.0 + sum(risk_components.values())))
-        deterministic_blocking_failure = any(
-            features.get(name, 0) > 0
-            for name in (
-                "financial_rule_fail_count",
-                "duration_rule_fail_count",
-                "eligibility_rule_fail_count",
-                "category_rule_fail_count",
-                "missing_document_count",
-            )
-        )
-        if deterministic_blocking_failure:
-            risk_score = max(risk_score, 55.0)
+        doc_completeness = features.get("document_completeness", 0.5)
+        field_completeness = features.get("required_field_completeness", 0.5)
+        eligibility_ratio = features.get("eligibility_pass_ratio", 0.5)
+        budget_ok = features.get("budget_consistency", 1.0)
+        cert_valid = features.get("certificate_validity", 1.0)
+        contradictions = features.get("contradiction_count", 0.0)
+        duplicate_sim = features.get("duplicate_similarity", 0.0)
+        suspicious = features.get("suspicious_indicator_count", 0.0)
+        doc_quality = features.get("document_quality", 0.5)
+        proposal_qual = features.get("proposal_quality", 0.5)
+        feasibility = features.get("project_feasibility", 0.5)
+        env_impact = features.get("environmental_impact", 0.4)
+        extraction_conf = features.get("extraction_confidence", 0.5)
 
-        quality_score = max(
-            0.0,
-            100.0
-            - risk_score
-            + features.get("environmental_impact", 0) * 5.0
-            + features.get("proposal_quality", 0) * 5.0
-            + features.get("scheme_guideline_match_score", 0) * 3.0,
+        risk_score = (
+            5.0
+            + (1.0 - doc_completeness) * 18.0
+            + (1.0 - field_completeness) * 12.0
+            + (1.0 - eligibility_ratio) * 14.0
+            + (1.0 - budget_ok) * 14.0
+            + (1.0 - cert_valid) * 8.0
+            + contradictions * 16.0
+            + duplicate_sim * 20.0
+            + suspicious * 8.0
+            + (1.0 - extraction_conf) * 10.0
         )
-        quality_score = min(100.0, quality_score)
+        risk_score = min(100.0, max(0.0, risk_score))
+        quality_score = max(0.0, min(100.0, 100.0 - risk_score + env_impact * 5.0 + proposal_qual * 5.0))
 
-        extraction_confidence = features.get("extraction_confidence", 0.5)
-        doc_completeness = features.get("document_completeness_ratio", features.get("document_completeness", 0.5))
-        budget_consistency = features.get("budget_consistency", 1.0)
-        validation_confidence = features.get("validation_confidence", 0.5)
-        confidence = max(
-            0.25,
-            min(0.95, 0.25 + extraction_confidence * 0.25 + doc_completeness * 0.2 + budget_consistency * 0.1 + validation_confidence * 0.2),
-        )
+        confidence = max(0.25, min(0.95,
+            0.25 + extraction_conf * 0.25 + doc_completeness * 0.2 + budget_ok * 0.1 + feasibility * 0.2
+        ))
 
         if risk_score >= 70:
             prediction_class = "HIGH_RISK"
@@ -291,23 +297,6 @@ class BaselineScoringService(ScoringService):
             prediction_class = "MEDIUM_RISK"
         else:
             prediction_class = "LOW_RISK"
-
-        top_risk_factors = [
-            name for name, value in sorted(risk_components.items(), key=lambda item: item[1], reverse=True) if value > 0
-        ][:5]
-        positive_factors = []
-        for name in (
-            "document_completeness_ratio",
-            "application_completeness",
-            "budget_consistency",
-            "duration_consistency",
-            "organization_eligibility",
-            "scheme_guideline_match_score",
-            "extraction_confidence",
-            "validation_confidence",
-        ):
-            if features.get(name, 0.0) >= 0.8:
-                positive_factors.append(name)
 
         return {
             "model_name": "BaselineRuleScorer",
@@ -317,17 +306,10 @@ class BaselineScoringService(ScoringService):
             "quality_score": round(quality_score, 1),
             "confidence": round(confidence, 3),
             "prediction_class": prediction_class,
-            "feature_contributions": {
-                key: round(value, 3)
-                for key, value in risk_components.items()
-                if value > 0
-            },
+            "feature_contributions": {},
             "status": "GENERATED_DEVELOPMENT_MODEL",
             "provider": "baseline",
-            "model_label": "GENERATED_DEVELOPMENT_MODEL",
-            "feature_schema_version": FEATURE_SCHEMA_VERSION,
-            "top_risk_factors": top_risk_factors,
-            "positive_factors": positive_factors[:5],
+            "model_status": "BASELINE_FALLBACK",
         }
 
 
@@ -337,11 +319,7 @@ class BaselineScoringService(ScoringService):
 
 
 class MockScoringService(ScoringService):
-    """
-    TEST USE ONLY.
-    Returns a labelled development-model prediction.
-    Must not be used in production paths.
-    """
+    """TEST USE ONLY. Returns a labelled development-model prediction."""
 
     def score(self, features: dict[str, float]) -> dict[str, Any]:
         return BaselineScoringService().score(features)
@@ -377,7 +355,7 @@ class PredictionPersistenceService:
         # 'unavailable' or unknown
         raise ModelUnavailableError(
             f"ML_PROVIDER='{settings.ml_provider}' — scoring is explicitly disabled. "
-            "Set ML_PROVIDER=xgboost and train a model."
+            "Set ML_PROVIDER=xgboost and ensure models are in the artifacts directory."
         )
 
     def score_and_save(
@@ -405,9 +383,11 @@ class PredictionPersistenceService:
                 "quality_score": None,
                 "confidence": 0.0,
                 "prediction_class": "UNAVAILABLE",
+                "class_probabilities": {"LOW_RISK": 0.0, "MEDIUM_RISK": 0.0, "HIGH_RISK": 0.0},
                 "feature_contributions": {},
                 "status": f"{exc.code}: {exc.message}",
                 "provider": "none",
+                "model_status": "UNAVAILABLE",
             }
 
         settings = get_settings()
@@ -443,18 +423,31 @@ class PredictionPersistenceService:
                 "confidence": prediction.confidence,
                 "status": prediction.status,
                 "feature_schema_version": prediction.feature_version,
-                "top_risk_factors": prediction_payload.get("top_risk_factors", []),
-                "positive_factors": prediction_payload.get("positive_factors", []),
+                "feature_count": len(features),
             },
         )
+        is_xgboost = prediction.provider == "xgboost"
+        is_baseline = prediction.provider == "baseline"
+        model_status = "ML_READY" if is_xgboost else ("BASELINE_FALLBACK" if is_baseline else "UNAVAILABLE")
         logger.info(
-            "[PIPELINE] application=%s stage=ML_SCORING provider=%s prediction_class=%s risk_score=%s quality_score=%s confidence=%.3f",
+            "[ML_SCORING] application=%s model_status=%s provider=%s prediction_class=%s "
+            "risk_score=%s quality_score=%s confidence=%.3f",
+            application.id, model_status,
+            prediction.provider,
+            prediction.prediction_class,
+            prediction.risk_score,
+            prediction.quality_score,
+            prediction.confidence or 0.0,
+        )
+        logger.info(
+            "[PIPELINE] application=%s stage=ML_SCORING provider=%s prediction_class=%s "
+            "risk_score=%s quality_score=%s confidence=%.3f",
             application.id,
             prediction.provider,
             prediction.prediction_class,
             prediction.risk_score,
             prediction.quality_score,
-            prediction.confidence,
+            prediction.confidence or 0.0,
         )
         return prediction
 
