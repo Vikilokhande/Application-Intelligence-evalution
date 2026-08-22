@@ -158,6 +158,11 @@ def process_application(application_id: str, db: Session = Depends(get_db)) -> d
         return application_processing_service.process(db, application_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApplicationError as exc:  # OCRProviderError, LLMProviderError, etc.
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -411,6 +416,37 @@ def create_scheme_rule(scheme_id: str, payload: SchemeRuleCreate, db: Session = 
     db.commit()
     db.refresh(rule)
     return rule
+
+
+@router.delete("/schemes/{scheme_id}/rules/{rule_id}", status_code=status.HTTP_200_OK)
+def delete_scheme_rule(scheme_id: str, rule_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    rule = db.get(SchemeRule, rule_id)
+    if rule is None or rule.scheme_id != scheme_id:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    db.delete(rule)
+    db.commit()
+    return {"status": "deleted", "id": rule_id}
+
+
+@router.delete("/documents/{document_id}", status_code=status.HTTP_200_OK)
+def delete_document(document_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    db.delete(document)
+    db.commit()
+    return {"status": "deleted", "id": document_id}
+
+
+@router.delete("/applications/{application_id}", status_code=status.HTTP_200_OK)
+def delete_application(application_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    application = db.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    db.delete(application)
+    db.commit()
+    return {"status": "deleted", "id": application_id}
+
 
 
 @router.get("/knowledge/search")

@@ -40,8 +40,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers
   });
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || response.statusText);
+    // Try to parse a structured FastAPI error body: { detail: string | { code, message } }
+    let message = response.statusText;
+    try {
+      const body = await response.json() as { detail?: string | { code?: string; message?: string } };
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      } else if (body.detail && typeof body.detail === "object") {
+        message = body.detail.message ?? body.detail.code ?? JSON.stringify(body.detail);
+      }
+    } catch {
+      // JSON parse failed — try raw text
+      try {
+        const text = await response.text();
+        if (text) message = text;
+      } catch { /* ignore */ }
+    }
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
@@ -91,6 +106,12 @@ export const api = {
   schemes: () => request<SchemeRead[]>("/schemes"),
   createRule: (schemeId: string, payload: Record<string, unknown>) =>
     request<SchemeRule>(`/schemes/${schemeId}/rules`, { method: "POST", body: JSON.stringify(payload) }),
+  deleteRule: (schemeId: string, ruleId: string) =>
+    request<{ status: string; id: string }>(`/schemes/${schemeId}/rules/${ruleId}`, { method: "DELETE" }),
+  deleteDocument: (documentId: string) =>
+    request<{ status: string; id: string }>(`/documents/${documentId}`, { method: "DELETE" }),
+  deleteApplication: (applicationId: string) =>
+    request<{ status: string; id: string }>(`/applications/${applicationId}`, { method: "DELETE" }),
   searchKnowledge: (query: string) =>
     request<KnowledgeResult[]>(
       `/knowledge/search?q=${encodeURIComponent(query)}`

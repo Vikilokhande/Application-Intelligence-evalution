@@ -183,6 +183,52 @@ export default function App() {
     }
   }
 
+  async function deleteRule(schemeId: string, ruleId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteRule(schemeId, ruleId);
+      await refreshLists();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rule deletion failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteDocument(documentId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteDocument(documentId);
+      if (selectedId) {
+        await refreshDetail(selectedId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Document deletion failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteApplication(applicationId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteApplication(applicationId);
+      if (selectedId === applicationId) {
+        setSelectedId(null);
+        setDetail(null);
+      }
+      await refreshLists();
+      setPage("dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Application deletion failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // 1st Entry Point Guard: Unauthenticated users or "login" page render Full-Screen Login Page
   if (!userSession || page === "login") {
     return <LoginPage onLoginSuccess={handleLogin} />;
@@ -191,19 +237,29 @@ export default function App() {
   return (
     <Shell page={page} onPageChange={setPage} selectedTitle={selectedTitle} userSession={userSession} onLogout={handleLogout}>
       {error && (
-        <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          {error}
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-[8px] border border-[#D9534F]/50 bg-[#D9534F]/10 px-4 py-3 font-mono text-xs text-[#E8EDF1]">
+          <div className="flex items-start gap-2 min-w-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D9534F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <span className="text-[#E8EDF1] leading-relaxed">{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="shrink-0 text-[#8B99A6] hover:text-[#E8EDF1] transition-colors font-bold text-sm leading-none"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
         </div>
       )}
       {page === "dashboard" && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
       {page === "new" && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
-      {page === "details" && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} />}
+      {page === "details" && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
       {page === "validation" && <ValidationVerification detail={detail} />}
       {page === "scoring" && <ScoringExplainability detail={detail} />}
       {page === "review" && <ReviewerWorkspace detail={detail} onDecision={submitDecision} onFeedback={submitFeedback} busy={busy} />}
       {page === "audit" && <AuditTrail detail={detail} />}
-      {page === "schemes" && <SchemeRules schemes={schemes} onCreateRule={createRule} />}
+      {page === "schemes" && <SchemeRules schemes={schemes} onCreateRule={createRule} onDeleteRule={deleteRule} />}
       {page === "analytics" && <Analytics analytics={analytics} />}
     </Shell>
   );

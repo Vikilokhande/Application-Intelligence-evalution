@@ -1,20 +1,32 @@
-import { UserCheck, Sparkles, AlertTriangle, ShieldCheck } from "lucide-react";
+// Structural Idea: A docked forensic decision cockpit framing reviewer authority with automatic AI override detection, dark token inputs, and zero emojis.
+
+import { AlertTriangle, ShieldCheck, UserCheck } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
 export function DecisionPanel({
   recommendation,
   onSubmit,
-  busy
+  busy,
 }: {
   recommendation?: string | null;
   onSubmit: (payload: Record<string, unknown>) => Promise<void>;
   busy?: boolean;
 }) {
   const [decision, setDecision] = useState("REQUEST_CLARIFICATION");
-  const [override, setOverride] = useState(false);
   const [reason, setReason] = useState("");
   const [comments, setComments] = useState("");
+
+  // Normalize AI recommendation for automatic override detection
+  const normRec = (recommendation || "").toUpperCase();
+  let mappedRec = "REQUEST_CLARIFICATION";
+  if (normRec.includes("APPROVE")) mappedRec = "APPROVE";
+  else if (normRec.includes("REJECT")) mappedRec = "REJECT";
+  else if (normRec.includes("CLARIF") || normRec.includes("EXPERT") || normRec.includes("REVIEW"))
+    mappedRec = "REQUEST_CLARIFICATION";
+
+  // Automatic override detection: true if selected decision differs from AI recommendation
+  const isOverride = decision !== mappedRec;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -22,101 +34,155 @@ export function DecisionPanel({
       reviewer_id: "demo-reviewer",
       decision,
       comments,
-      override_ai_recommendation: override,
-      override_reason: override ? reason : null
+      override_ai_recommendation: isOverride,
+      override_reason: isOverride ? reason : null,
     });
   }
 
   return (
-    <form onSubmit={submit} className="panel border-2 border-[#0F766E]/40 bg-[#F0FDF4] space-y-5">
-      {/* Header with AI ASSISTS vs HUMAN DECIDES boundary */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
+    <form
+      onSubmit={submit}
+      className="rounded-[10px] border border-[#22303A] bg-[#131A21] font-sans text-[#E8EDF1] overflow-hidden"
+    >
+      {/* ── Cockpit Header ─────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#22303A] px-4 py-2.5 bg-[#0B0F14]/60 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0F766E] text-white shadow-sm">
-            <UserCheck size={22} aria-hidden="true" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#3DDC84]/40 bg-[#3DDC84]/10 text-[#3DDC84] shrink-0">
+            <UserCheck size={16} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-[#0F172A]">Final Human Decision</h2>
-              <span className="human-boundary-badge">✓ Human Authority</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-[#E8EDF1]">
+                3. HUMAN REVIEW DECISION COCKPIT
+              </h2>
+              <span className="font-mono text-[9px] font-bold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-2 py-0.5 rounded-[4px] uppercase">
+                AUTHORIZED HUMAN FINAL
+              </span>
             </div>
-            <p className="text-xs text-[#475569] mt-0.5">Final approval or clarification must be explicitly confirmed by an authorized human reviewer.</p>
+            <p className="text-[11px] text-[#8B99A6] mt-0.5">
+              Decisions are permanently logged to the Directorate audit ledger.
+            </p>
           </div>
         </div>
 
-        {/* AI Recommendation Context Badge */}
-        <div className="flex items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 px-3.5 py-2">
-          <Sparkles size={16} className="text-sky-700" />
-          <div>
-            <div className="text-[10px] uppercase font-bold tracking-wider text-sky-800">AI Recommendation</div>
-            <div className="text-xs font-bold text-sky-900">{recommendation?.replaceAll("_", " ") ?? "Pending Evaluation"}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Decision Form Controls */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block">
-          <span className="field-label">Human Action</span>
-          <select
-            className="w-full"
-            value={decision}
-            onChange={(event) => setDecision(event.target.value)}
-          >
-            <option value="APPROVE">Approve Application</option>
-            <option value="REJECT">Reject Application</option>
-            <option value="REQUEST_CLARIFICATION">Request Clarification</option>
-            <option value="OVERRIDE_AI_RECOMMENDATION">Override AI Recommendation</option>
-          </select>
-        </label>
-
-        <div className="flex items-end">
-          <label className="flex h-[42px] w-full items-center gap-3 rounded-lg border border-[#CBD5E1] bg-white px-3.5 text-xs font-semibold text-[#0F172A] cursor-pointer hover:border-[#0D9488]">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded accent-[#0F766E]"
-              checked={override}
-              onChange={(event) => setOverride(event.target.checked)}
-            />
-            <span className="flex items-center gap-1.5 text-amber-700 font-semibold">
-              <AlertTriangle size={14} /> Override AI Recommendation
-            </span>
-          </label>
-        </div>
-      </div>
-
-      {override && (
-        <label className="block">
-          <span className="block text-xs font-semibold uppercase tracking-wider text-amber-700 mb-1.5">
-            Mandatory Override Reason *
+        {/* AI Recommendation badge */}
+        <div className="flex items-center gap-2 rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-mono shrink-0">
+          <span className="text-[10px] text-[#8B99A6] uppercase">AI REC:</span>
+          <span className="text-xs font-bold text-[#3DDC84] uppercase">
+            {recommendation?.replaceAll("_", " ") ?? "PENDING EVALUATION"}
           </span>
-          <textarea
-            className="min-h-20 w-full border-amber-300 focus:border-amber-500"
-            placeholder="Explain why you are overriding the AI model's recommendation for governance auditing..."
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            required
-          />
-        </label>
-      )}
-
-      <label className="block">
-        <span className="field-label">Reviewer Comments & Operational Notes</span>
-        <textarea
-          className="min-h-24 w-full"
-          placeholder="Add operational notes or clarification request details..."
-          value={comments}
-          onChange={(event) => setComments(event.target.value)}
-        />
-      </label>
-
-      <div className="flex items-center justify-between pt-2 border-t border-[#E2E8F0]">
-        <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-          <ShieldCheck size={14} className="text-[#0F766E]" /> Action will be recorded to official audit log
         </div>
-        <button type="submit" className="primary-button" disabled={busy}>
-          {busy ? "Recording Decision..." : "Submit Human Decision"}
-        </button>
+      </div>
+
+      {/* ── Controls ───────────────────────────────────────────────────── */}
+      <div className="p-4 space-y-4 font-mono text-xs">
+        {/* Row 1: Decision Action + Alignment Status side-by-side */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Decision dropdown */}
+          <div>
+            <label className="block text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1.5">
+              DECISION ACTION <span className="text-[#D9534F]">*</span>
+            </label>
+            <select
+              className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-2.5 text-xs font-semibold text-[#E8EDF1] focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
+              value={decision}
+              onChange={(e) => setDecision(e.target.value)}
+            >
+              <option value="APPROVE">APPROVE APPLICATION</option>
+              <option value="REJECT">REJECT APPLICATION</option>
+              <option value="REQUEST_CLARIFICATION">REQUEST CLARIFICATION</option>
+            </select>
+          </div>
+
+          {/* Override / alignment indicator */}
+          <div>
+            <label className="block text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1.5">
+              AI ALIGNMENT STATUS
+            </label>
+            <div
+              className={`flex items-center gap-2 rounded-[6px] border px-3 py-2.5 text-xs font-semibold transition-colors ${
+                isOverride
+                  ? "border-[#E0A93D] bg-[#E0A93D]/10 text-[#E0A93D]"
+                  : "border-[#3DDC84]/30 bg-[#3DDC84]/5 text-[#3DDC84]"
+              }`}
+            >
+              {isOverride ? (
+                <>
+                  <AlertTriangle size={15} className="shrink-0" />
+                  <span>AI OVERRIDE DETECTED</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={15} className="shrink-0" />
+                  <span>ALIGNS WITH AI RECOMMENDATION</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Reviewer notes (full width) */}
+        <div>
+          <label className="block text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1.5">
+            REVIEWER AUDIT NOTES
+          </label>
+          <textarea
+            rows={3}
+            className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-2.5 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84] resize-none leading-relaxed"
+            placeholder="Add operational notes or specific clarification requests for audit ledger..."
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+          />
+        </div>
+
+        {/* Row 3: Mandatory override reason (only shown on override) */}
+        {isOverride && (
+          <div className="rounded-[8px] border border-[#E0A93D]/30 bg-[#E0A93D]/5 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-[#E0A93D] uppercase tracking-wider">
+              <AlertTriangle size={12} />
+              MANDATORY OVERRIDE RATIONALE <span className="text-[#D9534F]">*</span>
+              <span className="text-[#8B99A6] font-normal normal-case tracking-normal ml-1">— Required for Audit Trail</span>
+            </div>
+            <textarea
+              rows={2}
+              className="w-full rounded-[6px] border border-[#E0A93D]/50 bg-[#0B0F14] px-3 py-2 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#E0A93D] resize-none leading-relaxed"
+              placeholder="Document forensic reason for overriding AI recommendation..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Submit Footer ──────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[#22303A] bg-[#0B0F14]/30">
+        <div className="flex items-center gap-1.5 font-mono text-[10px] text-[#8B99A6]">
+          <ShieldCheck size={13} className="text-[#3DDC84]" />
+          <span>AUDIT TRACEABLE DECISION RECORD</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {(comments || reason || decision !== mappedRec) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDecision(mappedRec);
+                setComments("");
+                setReason("");
+              }}
+              className="font-mono text-xs font-bold uppercase tracking-wider px-3.5 py-2 rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#8B99A6] hover:text-[#E8EDF1] hover:border-[#8B99A6] transition-colors"
+            >
+              CLEAR FORM
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={busy}
+            className="inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider px-5 py-2 rounded-[6px] border border-[#3DDC84] bg-[#3DDC84] text-[#0B0F14] hover:bg-[#3DDC84]/90 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] disabled:opacity-50 transition-colors"
+          >
+            {busy ? "RECORDING..." : "SUBMIT DECISION"}
+          </button>
+        </div>
       </div>
     </form>
   );

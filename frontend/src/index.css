@@ -130,7 +130,7 @@ body {
 
 
 
-/* Normal Active Form Controls - Clean Light Theme */
+/* Normal Active Form Controls - Dark Control Room Theme (DESIGN.md) */
 input[type="text"],
 input[type="number"],
 input[type="email"],
@@ -138,37 +138,42 @@ input[type="search"],
 input[type="password"],
 select,
 textarea {
-  background-color: #FFFFFF !important;
-  color: #0F172A !important;
-  border: 1px solid #CBD5E1 !important;
-  border-radius: 0.5rem;
-  padding: 0.625rem 0.875rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  background-color: #0B0F14 !important;
+  color: #E8EDF1 !important;
+  border: 1px solid #22303A !important;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
   transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #94A3B8 !important;
-  opacity: 1;
+  color: #8B99A6 !important;
+  opacity: 0.8;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none !important;
-  border-color: #0D9488 !important;
-  box-shadow: 0 0 0 1px #0D9488 !important;
+  border-color: #3DDC84 !important;
+  box-shadow: 0 0 0 1px #3DDC84 !important;
 }
 
 select {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%64748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 0.75rem center;
-  background-repeat: no-repeat;
-  background-size: 1.25em 1.25em;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238B99A6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 0.75rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1.25em 1.25em !important;
   padding-right: 2.5rem !important;
   appearance: none;
+}
+
+option {
+  background-color: #131A21;
+  color: #E8EDF1;
 }
 
 /* Custom Scrollbars */
