@@ -408,6 +408,7 @@ class LLMReasoningService:
                     json_mode=False,
                     correlation_id=str(application.id),
                     backoff_base=backoff_base,
+                    log_scope="AI_REASONING",
                 )
 
                 try:
@@ -481,9 +482,9 @@ class LLMReasoningService:
 
                 # ── Attempt 2: fallback model (only if it differs from primary) ────
                 if fallback_model and fallback_model != primary_model:
-                    logger.info(
-                        "[AI_REASONING] application=%s model=%s status=FALLBACK switching_to=%s",
-                        application.id, primary_model, fallback_model,
+                    logger.warning(
+                        "[AI_REASONING] primary_failed fallback=%s",
+                        fallback_model,
                     )
                     try:
                         result = _do_reason(_build_provider(fallback_model), fallback_model)
@@ -508,9 +509,9 @@ class LLMReasoningService:
         except LLMProviderError as exc:
             duration_ms = round((time.monotonic() - started) * 1000)
             logger.warning(
-                "[AI_REASONING] application=%s status=UNAVAILABLE reason=%s duration_ms=%d "
+                "[AI_REASONING] status=UNAVAILABLE reason=%s duration_ms=%d "
                 "NOTE: XGBoost+RAG+deterministic results preserved",
-                application.id, getattr(exc, 'code', 'LLM_PROVIDER_ERROR'), duration_ms,
+                getattr(exc, 'code', 'LLM_PROVIDER_ERROR'), duration_ms,
             )
             result = {
                 "status": "UNAVAILABLE",
@@ -574,7 +575,7 @@ class LLMReasoningService:
             from app.core.config import get_settings
             return get_settings().groq_reasoning_model
         except Exception:
-            return "google/gemma-4-26b-a4b-it:free"  # OpenRouter free model fallback
+            return "z-ai/glm-5.2:free"  # OpenRouter free model fallback
 
     def _get(self, profile: dict[str, Any], path: str) -> Any:
         """Traverse dotted path in profile dict, resolving selected_value where present."""

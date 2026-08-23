@@ -170,10 +170,11 @@ async def lifespan(_: FastAPI):
         _startup_status["knowledge"] = {"status": "failed", "reason": str(exc)}
 
     logger.info(
-        "Startup complete. DEMO_MODE=%s LLM=%s(%s) OCR=%s ML=%s EMBEDDING=%s KB_CHUNKS=%s",
+        "Startup complete. DEMO_MODE=%s LLM=%s(provider=%s model=%s) OCR=%s ML=%s EMBEDDING=%s KB_CHUNKS=%s",
         settings.demo_mode,
         _startup_status["llm"].get("status"),
         settings.llm_provider,
+        settings.llm_model,
         _startup_status["ocr"].get("status"),
         _startup_status["ml"].get("status"),
         settings.embedding_provider,

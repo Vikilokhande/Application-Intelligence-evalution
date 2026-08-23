@@ -32,10 +32,20 @@ class ConfigurationError(ApplicationError):
 class LLMProviderError(ApplicationError):
     """Raised when the configured LLM provider fails or is unavailable."""
 
-    def __init__(self, message: str, provider: str = "") -> None:
+    def __init__(
+        self,
+        message: str,
+        provider: str = "",
+        status_code: int | None = None,
+        retry_after: float | None = None,
+        model: str = "",
+    ) -> None:
         detail = f"[LLM:{provider}] {message}" if provider else message
         super().__init__(detail, "LLM_PROVIDER_ERROR")
         self.provider = provider
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.model = model
 
 
 class OCRProviderError(ApplicationError):
