@@ -24,6 +24,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 export type PageKey =
+  | "landing"
   | "login"
   | "dashboard"
   | "new"
@@ -43,9 +44,15 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
+    groupName: "OVERVIEW",
+    items: [
+      { key: "landing", label: "Public Landing", icon: Activity },
+      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
     groupName: "WORKSPACE",
     items: [
-      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
       { key: "new", label: "New Application", icon: FilePlus2 },
       { key: "processing", label: "Processing", icon: Workflow },
       { key: "details", label: "Details", icon: FileText },

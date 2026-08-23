@@ -129,6 +129,32 @@ class ApplicationProcessingService:
                     raise
 
             state["extracted_data"] = [item.raw_data for item in extracted_all]
+
+            # Check if any document operated in degraded mode (e.g. LLM unavailable)
+            degraded_docs = [
+                doc.id for doc in documents
+                if doc.metadata_json and doc.metadata_json.get("degraded_mode")
+            ]
+            if degraded_docs:
+                state["degraded_mode"] = True
+                state["degraded_reasons"] = ["LLM_UNAVAILABLE_REGEX_FALLBACK"]
+                state["degraded_banner"] = "DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION"
+                audit_service.record(
+                    db,
+                    "degraded_mode_flagged",
+                    application_id=application.id,
+                    payload={
+                        "stage": "EXTRACT",
+                        "flag": "DEGRADED_MODE: LLM_UNAVAILABLE_REGEX_FALLBACK",
+                        "affected_documents": degraded_docs,
+                        "message": "LLM provider unavailable during document extraction. Pipeline operated in regex fallback mode.",
+                    },
+                )
+                logger.warning(
+                    "[PIPELINE] application=%s DEGRADED_MODE flagged (affected_docs=%d)",
+                    application.id, len(degraded_docs),
+                )
+
             _stage_done(
                 application.id, "EXTRACT", t0,
                 documents=len(extracted_all),

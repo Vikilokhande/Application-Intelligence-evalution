@@ -91,6 +91,7 @@ export interface EvidenceRead {
 
 export interface ApplicationDetail extends ApplicationSummary {
   form_data: Record<string, unknown>;
+  workflow_state?: Record<string, unknown>;
   documents: DocumentRead[];
   validation_results: ValidationResult[];
   rule_results: RuleResult[];

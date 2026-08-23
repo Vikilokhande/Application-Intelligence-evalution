@@ -148,7 +148,7 @@ export function NewApplication({
               </span>
             </div>
             <p className="text-xs text-[#8B99A6] mt-0.5">
-              Directorate of Environment & Climate Change • Register metadata & ingest document package
+              Environmental Application Review & Decision Support • Register metadata & ingest document package
             </p>
           </div>
         </div>

@@ -45,38 +45,58 @@ logger = logging.getLogger(__name__)
 # Regex patterns used as secondary verification / fallback
 # ---------------------------------------------------------------------------
 
+# Delimiter pattern matching :, =, |, tab, or 2+ spaces
+DELIM_RE = r"(?:[\s\t]*[:=\|][\s\t]*|[\s\t]{2,})"
+
 COST_RE = re.compile(
-    r"(?:project[_\s-]*cost|total[_\s-]*cost|budget[_\s-]*total|cost)\s*[:=]\s*"
-    r"(?:inr|rs\.?)?\s*([0-9][0-9,\.]*)\s*(lakh|lakhs|crore|crores)?",
+    r"(?:project[_\s-]*cost|total[_\s-]*cost|budget[_\s-]*total|requested[_\s-]*grant[_\s-]*amount|grant[_\s-]*amount|cost)"
+    r"(?:\s*\([^)]*\))?"
+    + DELIM_RE +
+    r"(?:inr|rs\.?|\u20b9)?\s*([0-9][0-9,\.]*)\s*(lakh|lakhs|crore|crores|k|million)?",
     re.IGNORECASE,
 )
 DURATION_RE = re.compile(
-    r"(?:duration|duration_months|project_duration)\s*[:=]\s*([0-9]{1,3})\s*(?:months|month|m)?",
+    r"(?:duration[_\s-]*months|project[_\s-]*duration|duration|timeline|period)"
+    r"(?:\s*\([^)]*\))?"
+    + DELIM_RE +
+    r"([0-9]{1,3})\s*(?:months|month|m)?",
     re.IGNORECASE,
 )
 FIELD_PATTERNS = {
     "applicant_name": re.compile(
-        r"(?:applicant|applicant_name|organization)\s*[:=]\s*([A-Za-z0-9 &.,'-]{3,160})",
+        r"(?:applicant[_\s-]*name|applicant[_\s-]*entity[_\s-]*name|organization[_\s-]*name|name[_\s-]*of[_\s-]*applicant|applicant|organization)"
+        + DELIM_RE +
+        r"([A-Za-z0-9 &.,'\-\(\)/\u2013\u2014]{3,160})",
         re.IGNORECASE,
     ),
     "project_title": re.compile(
-        r"(?:project_title|project title|title)\s*[:=]\s*([A-Za-z0-9 &.,'/-]{3,200})",
+        r"(?:project[_\s-]*title|title[_\s-]*of[_\s-]*project|project[_\s-]*name|title)"
+        + DELIM_RE +
+        r"([A-Za-z0-9 &.,'\-/\(\)\u2013\u2014\u2015\u2212]{3,200})",
         re.IGNORECASE,
     ),
     "organization_type": re.compile(
-        r"(?:organization_type|organization type)\s*[:=]\s*([A-Za-z ]{3,80})",
+        r"(?:organization[_\s-]*type|applicant[_\s-]*type|entity[_\s-]*type|nature[_\s-]*of[_\s-]*organization|org[_\s-]*type)"
+        + DELIM_RE +
+        r"([A-Za-z0-9 &.,'\-/\(\)]{2,80})",
         re.IGNORECASE,
     ),
     "project_category": re.compile(
-        r"(?:project_category|project category|category)\s*[:=]\s*([A-Za-z &/-]{3,120})",
+        r"(?:project_category|project category|category|sector|nature of project)"
+        + DELIM_RE +
+        r"([A-Za-z0-9 &.,'\-/\(\)]{3,120})",
         re.IGNORECASE,
     ),
     "certificate_number": re.compile(
-        r"(?:certificate_number|certificate no|certificate)\s*[:=]\s*([A-Za-z0-9/-]{3,80})",
+        r"(?:certificate[_\s-]*number|certificate[_\s-]*no\.?|certificate[_\s-]*ref\.?|certificate[_\s-]*reference|registration[_\s-]*number|registration[_\s-]*no\.?|reg[_\s-]*no\.?|certificate)"
+        + DELIM_RE +
+        r"([A-Za-z0-9/\-\.]{3,80})",
         re.IGNORECASE,
     ),
     "environmental_benefit": re.compile(
-        r"(?:environmental_benefit|impact|benefit)\s*[:=]\s*([A-Za-z0-9 ,.'/-]{8,240})",
+        r"(?:environmental_benefit|environmental benefit|environmental impact|impact summary|technical proposal summary|impact|benefit)"
+        + DELIM_RE +
+        r"([A-Za-z0-9 ,.'/\-\(\)%]{8,300})",
         re.IGNORECASE,
     ),
 }
@@ -93,54 +113,142 @@ DOCUMENT_TYPE_MAP = {
 }
 
 
-def _classify_by_filename(filename: str, declared_type: str | None) -> str:
-    """Deterministic filename/type heuristic — used only as LLM fallback."""
+def _classify_by_filename(filename: str, declared_type: str | None) -> str | None:
+    """Deterministic filename keyword matching."""
     if declared_type and declared_type.upper() not in ("UNKNOWN", ""):
         return declared_type.upper()
     name = filename.lower()
     for keyword, doc_type in DOCUMENT_TYPE_MAP.items():
         if keyword in name:
             return doc_type
-    if name.endswith((".xlsx", ".xls", ".csv")):
-        return "BUDGET"
-    if name.endswith((".jpg", ".jpeg", ".png", ".tiff", ".tif")):
-        return "IMAGE"
-    if name.endswith(".json"):
-        return "APPLICATION_FORM"
-    return "SUPPORTING_DOCUMENT"
+    return None
 
 
-DOCUMENT_TYPE_SIGNALS = {
-    "APPLICATION_FORM": ("application form", "applicant name", "form data", "declaration"),
-    "PROPOSAL": ("proposal", "project objective", "project description", "implementation plan"),
-    "BUDGET": ("budget", "total cost", "line item", "financial", "amount"),
-    "CERTIFICATE": ("certificate", "registration", "certified", "certificate number"),
-    "TIMELINE": ("timeline", "milestone", "duration", "schedule"),
-    "TECHNICAL_REPORT": ("technical report", "specification", "methodology"),
-    "ENVIRONMENTAL_REPORT": ("environmental", "impact assessment", "biodiversity", "emissions"),
-    "SUPPORTING_DOCUMENT": ("supporting", "annexure", "attachment"),
+# Signal dictionary mapping document type -> tuple of (signal_phrase, weight, signal_category)
+# High weight (3) = explicit unambiguous type marker (e.g. "eligibility certificate", "project proposal")
+# Medium weight (2) = document specific term (e.g. "certificate", "proposal", "budget breakdown")
+# Low weight (1) = generic shared header (e.g. "applicant name", "form data")
+DOCUMENT_TYPE_WEIGHTED_SIGNALS: dict[str, list[tuple[str, int]]] = {
+    "APPLICATION_FORM": [
+        ("application form", 3),
+        ("official application", 3),
+        ("grant application form", 3),
+        ("declaration", 2),
+        ("form data", 1),
+        ("applicant name", 1),  # Low weight: shared header in tables
+    ],
+    "PROPOSAL": [
+        ("project proposal", 3),
+        ("technical proposal", 3),
+        ("proposal summary", 3),
+        ("proposes to", 3),
+        ("proposal", 2),
+        ("project objective", 2),
+        ("project description", 2),
+        ("implementation plan", 2),
+    ],
+    "BUDGET": [
+        ("budget statement", 3),
+        ("project budget", 3),
+        ("itemized budget", 3),
+        ("financial breakdown", 3),
+        ("budget", 2),
+        ("line item", 2),
+        ("total cost", 2),
+        ("total project cost", 2),
+    ],
+    "CERTIFICATE": [
+        ("eligibility certificate", 3),
+        ("registration certificate", 3),
+        ("certifying authority", 3),
+        ("certificate ref", 3),
+        ("is to certify", 3),
+        ("certificate number", 3),
+        ("certificate", 2),
+        ("certified", 2),
+        ("registration", 2),
+    ],
+    "TIMELINE": [
+        ("project timeline", 3),
+        ("implementation schedule", 3),
+        ("timeline", 2),
+        ("milestone", 2),
+        ("schedule", 2),
+    ],
+    "TECHNICAL_REPORT": [
+        ("technical report", 3),
+        ("specification report", 3),
+        ("methodology", 2),
+        ("specification", 2),
+    ],
+    "ENVIRONMENTAL_REPORT": [
+        ("environmental impact", 3),
+        ("impact assessment", 3),
+        ("biodiversity assessment", 3),
+        ("environmental", 2),
+        ("emissions", 2),
+    ],
+    "SUPPORTING_DOCUMENT": [
+        ("annexure", 2),
+        ("attachment", 2),
+        ("supporting document", 2),
+    ],
+}
+
+# Specificity rank used as secondary tie-breaker (specific document types win over generic APPLICATION_FORM)
+DOCUMENT_TYPE_SPECIFICITY_RANK = {
+    "CERTIFICATE": 10,
+    "PROPOSAL": 10,
+    "BUDGET": 10,
+    "TIMELINE": 10,
+    "TECHNICAL_REPORT": 10,
+    "ENVIRONMENTAL_REPORT": 10,
+    "FINANCIAL_REPORT": 10,
+    "APPLICATION_FORM": 5,
+    "SUPPORTING_DOCUMENT": 3,
+    "OTHER": 1,
 }
 
 
 def _classify_by_content_and_filename(filename: str, declared_type: str | None, text: str) -> tuple[str, float, list[str]]:
-    """Content + filename heuristic used only when LLM classification is unavailable."""
+    """
+    Weighted content + filename heuristic classifier used when LLM classification is unavailable.
+    - Explicit filename keywords take priority.
+    - Content signals are weighted (specific type markers beat generic shared table headers).
+    - Ties are resolved safely by specificity rank instead of dictionary iteration order.
+    """
     if declared_type and declared_type.upper() not in ("UNKNOWN", ""):
         return declared_type.upper(), 0.8, ["declared_type"]
 
+    filename_type = _classify_by_filename(filename, None)
     haystack = f"{filename.lower()} {text[:3000].lower()}"
-    scores: dict[str, int] = {}
-    matched: list[str] = []
-    for doc_type, signals in DOCUMENT_TYPE_SIGNALS.items():
-        score = 0
-        for signal in signals:
-            if signal in haystack:
-                score += 1
-                matched.append(signal)
-        scores[doc_type] = score
 
-    best_type, best_score = max(scores.items(), key=lambda item: item[1])
+    scores: dict[str, int] = {dt: 0 for dt in DOCUMENT_TYPE_WEIGHTED_SIGNALS}
+    matched_signals: dict[str, list[str]] = {dt: [] for dt in DOCUMENT_TYPE_WEIGHTED_SIGNALS}
+
+    # Add strong score boost if filename explicitly names the document type
+    if filename_type and filename_type in scores:
+        scores[filename_type] += 5
+        matched_signals[filename_type].append(f"filename:{filename_type.lower()}")
+
+    for doc_type, signal_list in DOCUMENT_TYPE_WEIGHTED_SIGNALS.items():
+        for signal_phrase, weight in signal_list:
+            if signal_phrase in haystack:
+                scores[doc_type] += weight
+                matched_signals[doc_type].append(signal_phrase)
+
+    # General tie-breaking: Sort by (score, specificity_rank) descending
+    candidates = sorted(
+        scores.items(),
+        key=lambda item: (item[1], DOCUMENT_TYPE_SPECIFICITY_RANK.get(item[0], 0)),
+        reverse=True,
+    )
+
+    best_type, best_score = candidates[0]
     if best_score > 0:
-        return best_type, round(min(0.75, 0.35 + best_score * 0.12), 3), matched[:5]
+        matches = matched_signals.get(best_type, [])
+        confidence = round(min(0.85, 0.40 + best_score * 0.08), 3)
+        return best_type, confidence, matches[:5]
 
     name = filename.lower()
     if name.endswith((".xlsx", ".xls", ".csv")):
@@ -159,11 +267,23 @@ def _money_to_rupees(number_text: str, unit: str | None) -> float:
         return value * 100_000
     if normalized_unit.startswith("crore"):
         return value * 10_000_000
+    if normalized_unit == "k":
+        return value * 1_000
+    if normalized_unit == "million":
+        return value * 1_000_000
     return value
 
 
+def _clean_extracted_text(raw_text: str) -> str:
+    """Clean extracted value string, removing trailing table pipes or headers."""
+    text = raw_text.strip()
+    if "|" in text:
+        text = text.split("|")[0].strip()
+    return text.strip()
+
+
 def _regex_extract_fields(text: str, document: Document) -> dict[str, Any]:
-    """Regex extraction — used as fallback verification, not primary method."""
+    """Regex extraction — used as fallback verification or primary when LLM unavailable."""
     fields: dict[str, Any] = {}
     cost_match = COST_RE.search(text)
     if cost_match:
@@ -188,14 +308,16 @@ def _regex_extract_fields(text: str, document: Document) -> dict[str, Any]:
     for field_name, pattern in FIELD_PATTERNS.items():
         match = pattern.search(text)
         if match:
-            fields[field_name] = _field_payload(
-                match.group(1).strip(),
-                match.group(0),
-                document,
-                field_name,
-                0.72,
-                "regex",
-            )
+            cleaned_val = _clean_extracted_text(match.group(1))
+            if cleaned_val:
+                fields[field_name] = _field_payload(
+                    cleaned_val,
+                    match.group(0),
+                    document,
+                    field_name,
+                    0.72,
+                    "regex",
+                )
     return fields
 
 
@@ -227,12 +349,6 @@ def _field_payload(
 def _parse_llm_extraction(llm_result: dict[str, Any], document: Document) -> dict[str, Any]:
     """
     Convert LLM structured extraction output into the internal field payload format.
-
-    LLM returns:
-    {
-      "applicant_name": {"value": "...", "confidence": 0.95, "source": "...", "reason": "..."},
-      ...
-    }
     """
     LLM_TO_INTERNAL: dict[str, str] = {
         "applicant_name": "applicant_name",
@@ -272,19 +388,23 @@ def _merge_fields(
 ) -> dict[str, Any]:
     """
     Merge LLM and regex extraction results.
-    LLM takes precedence. Regex fills gaps.
-    When they disagree on the same field, keep LLM but record conflict in metadata.
+    LLM takes precedence when it produces a non-null value.
+    Per-field null awareness: if LLM returns null/empty for a field, regex result is used.
+    When both sources provide valid non-null values, compare confidence or record conflict.
     """
     merged = dict(llm_fields)
     for key, regex_payload in regex_fields.items():
-        if key not in merged:
-            # Fill gap with regex result
-            merged[key] = regex_payload
+        llm_payload = merged.get(key)
+        llm_val = llm_payload.get("value") if isinstance(llm_payload, dict) else None
+        regex_val = regex_payload.get("value") if isinstance(regex_payload, dict) else None
+
+        if llm_val in (None, ""):
+            # LLM missed or returned null/empty — use regex payload if regex extracted a non-null value
+            if regex_val not in (None, ""):
+                merged[key] = regex_payload
         else:
-            # Check for conflict
-            llm_val = merged[key].get("value")
-            regex_val = regex_payload.get("value")
-            if llm_val != regex_val:
+            # Both sources extracted non-null values — check for conflict
+            if regex_val not in (None, "") and llm_val != regex_val:
                 merged[key]["_regex_conflict"] = {
                     "regex_value": regex_val,
                     "regex_confidence": regex_payload.get("confidence"),
@@ -517,8 +637,22 @@ class DocumentIntelligenceService:
                 )
                 document.metadata_json["llm_extraction_error"] = exc.message
                 document.metadata_json["llm_status"] = "FAILED"
+                document.metadata_json["degraded_mode"] = True
+                document.metadata_json["degraded_reason"] = "LLM_UNAVAILABLE_REGEX_FALLBACK"
+                document.metadata_json["degraded_message"] = f"DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION ({exc.message})"
                 extraction_method = "regex_with_llm_unavailable"
                 llm_status = "FAILED"
+                audit_service.record(
+                    db,
+                    "degraded_mode_activated",
+                    application_id=document.application_id,
+                    payload={
+                        "document_id": document.id,
+                        "flag": "DEGRADED_MODE: LLM_UNAVAILABLE_REGEX_FALLBACK",
+                        "reason": exc.message,
+                        "message": f"LLM provider unavailable for extraction. Degraded regex fallback active.",
+                    },
+                )
             except Exception as exc:
                 logger.warning(
                     "Unexpected error in LLM extraction for doc=%s, falling back to regex: %s",
@@ -526,8 +660,22 @@ class DocumentIntelligenceService:
                 )
                 document.metadata_json["llm_extraction_error"] = str(exc)
                 document.metadata_json["llm_status"] = "FAILED"
+                document.metadata_json["degraded_mode"] = True
+                document.metadata_json["degraded_reason"] = "LLM_UNAVAILABLE_REGEX_FALLBACK"
+                document.metadata_json["degraded_message"] = f"DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION ({exc})"
                 extraction_method = "regex_with_llm_error"
                 llm_status = "FAILED"
+                audit_service.record(
+                    db,
+                    "degraded_mode_activated",
+                    application_id=document.application_id,
+                    payload={
+                        "document_id": document.id,
+                        "flag": "DEGRADED_MODE: LLM_UNAVAILABLE_REGEX_FALLBACK",
+                        "reason": str(exc),
+                        "message": f"LLM extraction error. Degraded regex fallback active.",
+                    },
+                )
         elif not text.strip():
             extraction_method = "no_text_extracted"
 

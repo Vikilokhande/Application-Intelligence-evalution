@@ -1,10 +1,9 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { CheckCircle2, Info, Lock, Mail, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
-
+import { CheckCircle2, Lock, Mail, ShieldCheck, UserCheck, Sparkles, Activity, Database, ArrowLeft } from "lucide-react";
 import { api } from "../services/api";
 
-export function LoginPage({ onLoginSuccess }: { onLoginSuccess: (user: { email: string; role: string }) => void }) {
+export function LoginPage({ onLoginSuccess, onBack }: { onLoginSuccess: (user: { email: string; role: string }) => void; onBack?: () => void; }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("senior_reviewer");
@@ -26,84 +25,169 @@ export function LoginPage({ onLoginSuccess }: { onLoginSuccess: (user: { email: 
   }
 
   return (
-    <div className="relative flex h-screen max-h-screen w-screen items-center justify-center overflow-hidden bg-[#F8FAFC] p-3 text-[#0F172A]">
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -top-32 right-0 h-[500px] w-[500px] rounded-full bg-[#0D9488]/[0.12] blur-3xl" />
-        <div className="absolute top-1/2 -left-32 h-[450px] w-[450px] rounded-full bg-[#0284C7]/[0.10] blur-3xl" />
-        <div className="absolute -bottom-32 right-1/4 h-[400px] w-[400px] rounded-full bg-[#10B981]/[0.08] blur-3xl" />
+    <div className="flex h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans">
+      {/* LEFT PANEL - Branding & Context (Navy) */}
+      <div className="hidden lg:flex lg:w-[40%] flex-col justify-between bg-[#0A2540] p-10 text-[#FFFFFF] relative overflow-hidden">
+        {/* Subtle Background Accent */}
+        <div className="absolute inset-0 z-0 opacity-10 pointer-events-none">
+          <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0,0 L100,100 M20,0 L100,80 M40,0 L100,60" stroke="#FFFFFF" strokeWidth="0.5" fill="none" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-[#C59B27]/40 bg-[#C59B27]/20 text-[#C59B27]">
+              <ShieldCheck size={28} />
+            </div>
+            <div>
+              <h1 className="font-sans text-lg font-bold tracking-wide text-[#FFFFFF] uppercase">
+                DECC REVIEW PORTAL
+              </h1>
+              <p className="text-xs text-[#94A3B8]">Environmental Application Review & Decision Support</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-10">
+            <h2 className="text-3xl font-extrabold leading-tight text-[#FFFFFF]">
+              Official Control Room Access
+            </h2>
+            <p className="text-[#CBD5E1] text-sm leading-relaxed max-w-sm">
+              Secure access for authorized environmental reviewers and officers.
+            </p>
+
+            {/* Feature Highlights */}
+            <div className="pt-8 space-y-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#16A34A]/20 text-[#4ADE80] border border-[#16A34A]/30 shrink-0">
+                  <CheckCircle2 size={16} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-[#FFFFFF]">Automated Extraction</h3>
+                  <p className="text-xs text-[#94A3B8] mt-1 leading-relaxed">Instant AI parsing of complex 400+ page EIA documents.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0284C7]/20 text-[#38BDF8] border border-[#0284C7]/30 shrink-0">
+                  <Activity size={16} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-[#FFFFFF]">Instant Rule Validation</h3>
+                  <p className="text-xs text-[#94A3B8] mt-1 leading-relaxed">Cross-check against 14 state environmental guidelines automatically.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5CF6]/20 text-[#A78BFA] border border-[#8B5CF6]/30 shrink-0">
+                  <Database size={16} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-[#FFFFFF]">Entity Registry Check</h3>
+                  <p className="text-xs text-[#94A3B8] mt-1 leading-relaxed">Real-time verification against PAN, GSTIN, and Aadhaar databases.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 flex flex-col gap-4">
+          <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#C59B27]/30 bg-[#C59B27]/10 px-3.5 py-1.5 text-xs font-bold text-[#C59B27]">
+            <Sparkles size={14} />
+            <span>AI ASSISTS - HUMAN DECIDES</span>
+          </div>
+          <p className="text-[10px] text-[#64748B] uppercase tracking-wider font-mono">
+            SECURE GOVERNMENT NETWORK V2.4
+          </p>
+        </div>
       </div>
 
-      <div className="relative z-10 w-full max-w-sm space-y-4">
-        <div className="space-y-1 text-center">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#0F766E] text-white shadow-md">
-            <ShieldCheck size={26} aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-extrabold tracking-tight text-[#0F172A]">Application Intelligence</h1>
-          <p className="text-xs font-bold text-[#0F766E]">Directorate Review Platform</p>
-          <p className="text-[10px] text-[#64748B]">Directorate of Environment & Climate Change</p>
-        </div>
-
-        <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-white/90 p-2.5 text-[11px] text-sky-900 shadow-sm backdrop-blur-md">
-          <Info size={14} className="mt-0.5 shrink-0 text-sky-700" />
-          <div>
-            <span className="block font-bold">Authorized Gateway Access</span>
-            Internal reviewer access for decision support and audit review.
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="panel space-y-3 rounded-xl border-[#CBD5E1] bg-white p-4 shadow-lg">
-          <div>
-            <label className="field-label mb-1 flex items-center gap-1 text-[11px]">
-              <Mail size={13} className="text-[#0F766E]" /> Work Email Address
-            </label>
-            <input
-              type="email"
-              required
-              className="w-full px-2.5 py-1.5 text-xs font-semibold"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="reviewer@directorate.gov.in"
-            />
-          </div>
-
-          <div>
-            <label className="field-label mb-1 flex items-center gap-1 text-[11px]">
-              <Lock size={13} className="text-[#0F766E]" /> Authorized Password
-            </label>
-            <input
-              type="password"
-              required
-              className="w-full px-2.5 py-1.5 text-xs font-semibold"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Development password"
-            />
-          </div>
-
-          <div>
-            <label className="field-label mb-1 flex items-center gap-1 text-[11px]">
-              <UserCheck size={13} className="text-[#0F766E]" /> Reviewer Designation
-            </label>
-            <select className="w-full px-2.5 py-1.5 text-xs font-bold" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="admin">ADMINISTRATOR</option>
-              <option value="senior_reviewer">SENIOR REVIEWER</option>
-              <option value="expert_reviewer">EXPERT REVIEWER</option>
-              <option value="normal_reviewer">CASE REVIEWER</option>
-            </select>
-          </div>
-
-          {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</div>}
-
-          <button type="submit" disabled={loading} className="primary-button h-9 w-full text-xs font-bold shadow-sm disabled:opacity-60">
-            <CheckCircle2 size={15} /> {loading ? "Signing In..." : "Sign In to Review Workspace"}
+      {/* RIGHT PANEL - Login Form (White) */}
+      <div className="flex flex-1 items-center justify-center bg-[#F8FAFC] p-6 shadow-[inset_1px_0_0_rgba(0,0,0,0.05)] relative">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="absolute top-6 left-6 lg:left-10 flex items-center gap-2 text-sm font-semibold text-[#64748B] hover:text-[#0A2540] transition-colors focus:outline-none"
+            aria-label="Back to Portal Home"
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Portal Home</span>
           </button>
-        </form>
-
-        <div className="rounded-lg border border-teal-200 bg-[#F0FDF4] p-2 text-center shadow-sm">
-          <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-[#0F766E]">
-            <Sparkles size={12} /> AI ASSISTS - HUMAN DECIDES
+        )}
+        <div className="w-full max-w-md space-y-8 rounded-[12px] border border-[#E2E8F0] bg-[#FFFFFF] p-8 shadow-sm">
+          <div className="space-y-2 text-center lg:text-left">
+            <h2 className="text-2xl font-bold text-[#0A2540]">Sign In</h2>
+            <p className="text-sm text-[#475569]">Enter your credentials to access the workspace.</p>
           </div>
-          <div className="mt-0.5 text-[9px] font-medium text-[#475569]">Authorized Decision Support Engine</div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-4">
+              {/* Email Input */}
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1.5 font-sans text-xs font-bold text-[#475569] uppercase tracking-wider">
+                  <Mail size={14} className="text-[#0A2540]" />
+                  Work Email Address
+                </span>
+                <input
+                  type="email"
+                  required
+                  className="w-full rounded-[6px] border border-[#CBD5E1] !bg-white px-3.5 py-2.5 font-sans text-sm !text-slate-900 placeholder-[#94A3B8] transition-colors focus:border-[#0A2540] focus:outline-none focus:ring-1 focus:ring-[#0A2540]"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="reviewer@directorate.gov.in"
+                />
+              </label>
+
+              {/* Password Input */}
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1.5 font-sans text-xs font-bold text-[#475569] uppercase tracking-wider">
+                  <Lock size={14} className="text-[#0A2540]" />
+                  Authorized Password
+                </span>
+                <input
+                  type="password"
+                  required
+                  className="w-full rounded-[6px] border border-[#CBD5E1] !bg-white px-3.5 py-2.5 font-sans text-sm !text-slate-900 placeholder-[#94A3B8] transition-colors focus:border-[#0A2540] focus:outline-none focus:ring-1 focus:ring-[#0A2540]"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                />
+              </label>
+
+              {/* Role Select */}
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1.5 font-sans text-xs font-bold text-[#475569] uppercase tracking-wider">
+                  <UserCheck size={14} className="text-[#0A2540]" />
+                  Reviewer Designation
+                </span>
+                <select
+                  className="w-full rounded-[6px] border border-[#CBD5E1] !bg-white px-3.5 py-2.5 font-sans text-sm font-semibold !text-slate-900 transition-colors focus:border-[#0A2540] focus:outline-none focus:ring-1 focus:ring-[#0A2540]"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                >
+                  <option value="admin" className="bg-white text-[#0F172A]">ADMINISTRATOR</option>
+                  <option value="senior_reviewer" className="bg-white text-[#0F172A]">SENIOR REVIEWER</option>
+                  <option value="expert_reviewer" className="bg-white text-[#0F172A]">EXPERT REVIEWER</option>
+                  <option value="normal_reviewer" className="bg-white text-[#0F172A]">CASE REVIEWER</option>
+                </select>
+              </label>
+            </div>
+
+            {error && (
+              <div className="rounded-[6px] border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm font-medium text-[#DC2626]">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-[6px] bg-[#0A2540] px-4 py-3 font-sans text-sm font-bold text-[#FFFFFF] transition-colors hover:bg-[#153454] focus:outline-none focus:ring-2 focus:ring-[#0A2540] focus:ring-offset-2 disabled:opacity-70"
+            >
+              <CheckCircle2 size={16} />
+              <span>{loading ? "Authenticating..." : "Sign In to Review Workspace"}</span>
+            </button>
+          </form>
         </div>
       </div>
     </div>

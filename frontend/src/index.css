@@ -3,18 +3,64 @@
 @tailwind utilities;
 
 :root {
-  color: #0F172A;
-  background-color: #F8FAFC;
+  color: #E8EDF1;
+  background-color: #0B0F14;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #F8FAFC;
-  color: #0F172A;
+  background-color: #0B0F14;
+  color: #E8EDF1;
+}
+
+/* Floating Ambient Color Orb Keyframe Animations */
+@keyframes orbFloat1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(40px, -50px) scale(1.15);
+  }
+  66% {
+    transform: translate(-30px, 30px) scale(0.9);
+  }
+}
+
+@keyframes orbFloat2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(-50px, 40px) scale(0.85);
+  }
+  66% {
+    transform: translate(35px, -45px) scale(1.12);
+  }
+}
+
+@keyframes orbFloat3 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(50px, 40px) scale(1.2);
+  }
+}
+
+.animate-orb-float-1 {
+  animation: orbFloat1 16s ease-in-out infinite;
+}
+
+.animate-orb-float-2 {
+  animation: orbFloat2 22s ease-in-out infinite;
+}
+
+.animate-orb-float-3 {
+  animation: orbFloat3 19s ease-in-out infinite;
 }
 
 /* Mild Entrance & Background Keyframe Animations */
@@ -130,50 +176,52 @@ body {
 
 
 
-/* Normal Active Form Controls - Dark Control Room Theme (DESIGN.md) */
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="search"],
-input[type="password"],
-select,
-textarea {
-  background-color: #0B0F14 !important;
-  color: #E8EDF1 !important;
-  border: 1px solid #22303A !important;
-  border-radius: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  line-height: 1rem;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
+@layer base {
+  /* Normal Active Form Controls - Dark Control Room Theme (DESIGN.md) */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="search"],
+  input[type="password"],
+  select,
+  textarea {
+    background-color: #0B0F14;
+    color: #E8EDF1;
+    border: 1px solid #22303A;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  }
 
-input::placeholder,
-textarea::placeholder {
-  color: #8B99A6 !important;
-  opacity: 0.8;
-}
+  input::placeholder,
+  textarea::placeholder {
+    color: #8B99A6;
+    opacity: 0.8;
+  }
 
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none !important;
-  border-color: #3DDC84 !important;
-  box-shadow: 0 0 0 1px #3DDC84 !important;
-}
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: #3DDC84;
+    box-shadow: 0 0 0 1px #3DDC84;
+  }
 
-select {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238B99A6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
-  background-position: right 0.75rem center !important;
-  background-repeat: no-repeat !important;
-  background-size: 1.25em 1.25em !important;
-  padding-right: 2.5rem !important;
-  appearance: none;
-}
+  select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238B99A6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.5rem;
+    appearance: none;
+  }
 
-option {
-  background-color: #131A21;
-  color: #E8EDF1;
+  option {
+    background-color: #131A21;
+    color: #E8EDF1;
+  }
 }
 
 /* Custom Scrollbars */

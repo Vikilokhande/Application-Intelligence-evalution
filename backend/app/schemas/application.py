@@ -127,6 +127,7 @@ class PredictionRead(BaseModel):
 
 class ApplicationDetail(ApplicationSummary):
     form_data: dict[str, Any]
+    workflow_state: dict[str, Any] = Field(default_factory=dict)
     documents: list[DocumentRead] = Field(default_factory=list)
     validation_results: list[ValidationResultRead] = Field(default_factory=list)
     rule_results: list[RuleResultRead] = Field(default_factory=list)

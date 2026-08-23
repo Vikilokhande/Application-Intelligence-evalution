@@ -177,6 +177,21 @@ export function ApplicationProcessing({
         </div>
       </div>
 
+      {/* ── DEGRADED MODE BANNER ───────────────────────────────────────────── */}
+      {(Boolean(workflow?.state?.degraded_mode) ||
+        Boolean(detail.workflow_state?.degraded_mode) ||
+        detail.documents.some((d) => d.metadata_json?.degraded_mode)) && (
+        <div className="relative z-10 rounded-[6px] border border-[#E0A93D] bg-[#E0A93D]/10 p-3 font-mono text-xs text-[#E0A93D] flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 font-bold uppercase tracking-wider">
+            <AlertTriangle size={15} />
+            <span>DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION</span>
+          </div>
+          <span className="text-[10px] border border-[#E0A93D]/40 bg-[#E0A93D]/20 px-2 py-0.5 rounded uppercase shrink-0">
+            SYSTEM DEGRADED
+          </span>
+        </div>
+      )}
+
       {/* ── ERROR BANNER (compact, expandable) ─────────────────────────────── */}
       {processingFailed && workflowErrors.length > 0 && (
         <div className="relative z-10 rounded-[6px] border border-[#D9534F] bg-[#D9534F]/10 overflow-hidden shrink-0">

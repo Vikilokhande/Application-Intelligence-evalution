@@ -481,6 +481,7 @@ def _application_detail(db: Session, application: Application) -> ApplicationDet
     return ApplicationDetail(
         **base,
         form_data=application.form_data or {},
+        workflow_state=application.workflow_state or {},
         documents=[DocumentRead.model_validate(item) for item in application.documents],
         validation_results=[ValidationResultRead.model_validate(item) for item in application.validation_results],
         rule_results=[

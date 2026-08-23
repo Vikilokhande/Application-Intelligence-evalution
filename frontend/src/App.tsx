@@ -11,6 +11,7 @@ import { SchemeRules } from "./pages/SchemeRules";
 import { ScoringExplainability } from "./pages/ScoringExplainability";
 import { ValidationVerification } from "./pages/ValidationVerification";
 import { LoginPage } from "./pages/LoginPage";
+import { LandingPage } from "./pages/LandingPage";
 import { api } from "./services/api";
 import type { AnalyticsOverview, ApplicationDetail, ApplicationSummary, SchemeRead, WorkflowResponse } from "./types/api";
 
@@ -25,8 +26,8 @@ export default function App() {
     }
   });
 
-  // Login is the DEFAULT 1st Entry Point if unauthenticated
-  const [page, setPage] = useState<PageKey>(() => (userSession ? "dashboard" : "login"));
+  // Landing page is the default entry point for all visitors
+  const [page, setPage] = useState<PageKey>("landing");
   const [applications, setApplications] = useState<ApplicationSummary[]>([]);
   const [schemes, setSchemes] = useState<SchemeRead[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
@@ -94,7 +95,15 @@ export default function App() {
     try {
       localStorage.removeItem("app_user_session");
     } catch {}
-    setPage("login");
+    setPage("landing");
+  }
+
+  function handleLaunchControlRoom() {
+    if (!userSession) {
+      setPage("login");
+    } else {
+      setPage("dashboard");
+    }
   }
 
   async function selectApplication(id: string) {
@@ -229,9 +238,14 @@ export default function App() {
     }
   }
 
-  // 1st Entry Point Guard: Unauthenticated users or "login" page render Full-Screen Login Page
+  // Public Landing Page view (unauthenticated or explicit landing)
+  if (page === "landing") {
+    return <LandingPage onLaunchControlRoom={handleLaunchControlRoom} />;
+  }
+
+  // Full-Screen Login Page view
   if (!userSession || page === "login") {
-    return <LoginPage onLoginSuccess={handleLogin} />;
+    return <LoginPage onLoginSuccess={handleLogin} onBack={() => setPage("landing")} />;
   }
 
   return (

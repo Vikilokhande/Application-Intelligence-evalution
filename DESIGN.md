@@ -10,17 +10,20 @@ Users are reviewers/auditors, not consumers. The feeling should be: **authoritat
 
 | Token Name | Hex / Value | Purpose / Description |
 | :--- | :--- | :--- |
-| **Background** | `#0B0F14` | Near-black root background (not pure black) |
-| **Surface / Panel** | `#131A21` | Panel surface |
-| **Panel Border** | `1px solid #22303A` | Crisp 1px border framing surfaces |
-| **Panel Border Radius** | `10px` | Subtle corner rounding (no heavy glassmorphism blur) |
-| **Accent (Primary Action / Alert)** | `#3DDC84` | Verification green |
-| **Accent (Risk / Warning)** | `#E0A93D` | Warning amber / orange |
-| **Accent (Fraud / Critical)** | `#D9534F` | Critical alert red |
-| **Text Primary** | `#E8EDF1` | High contrast primary readable text |
-| **Text Secondary** | `#8B99A6` | Low contrast metadata and label text |
-| **Display Typeface** | `"IBM Plex Mono"`, `"JetBrains Mono"`, monospace | Numbers, scores, timestamps, IDs — audit ledger identity |
-| **Body Typeface** | `"Inter"`, `"IBM Plex Sans"`, sans-serif | General UI labels, descriptions, and inputs |
+| **Background** | `#F8FAFC` | Official light theme root background (no dark backgrounds) |
+| **Surface / Panel** | `#FFFFFF` | White panel surface |
+| **Panel Border** | `1px solid #E2E8F0` | Crisp 1px slate border framing surfaces |
+| **Panel Border Radius** | `10px` | Subtle corner rounding |
+| **Primary Accent (Navy)** | `#0A2540` | Official Directorate navy accent |
+| **Secondary Accent (Gold)**| `#C59B27` | Emblem gold highlight for badges, seals & accents |
+| **Highlight Accent (Teal/Cyan)**| `#0EA5E9` | Sparingly used for headline gradient text highlights only |
+| **Verification Green** | `#16A34A` | Verification green for passed rules & checklists |
+| **Warning Amber** | `#D97706` | Warning amber |
+| **Critical Red** | `#DC2626` | Critical alert red |
+| **Text Primary** | `#0F172A` | Deep slate-900 high contrast readable text |
+| **Text Secondary** | `#475569` | Low contrast metadata and label text |
+| **Display Typeface** | `"IBM Plex Mono"`, `"JetBrains Mono"`, monospace | Numbers, scores, timestamps, IDs, reference tags |
+| **Body Typeface** | `"Inter"`, `"IBM Plex Sans"`, sans-serif | Headlines, UI labels, descriptions, and CTA buttons |
 | **Spacing Grid** | `8px` increments (8, 16, 24, 32...) | Strict grid layout; no arbitrary pixel offsets |
 
 ---

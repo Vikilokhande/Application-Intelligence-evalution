@@ -133,6 +133,34 @@ export function ApplicationDetails({
         </div>
       </div>
 
+      {/* DEGRADED MODE WARNING BANNER */}
+      {(Boolean(detail.workflow_state?.degraded_mode) ||
+        detail.documents.some((d) => d.metadata_json?.degraded_mode) ||
+        detail.audit_trail.some(
+          (evt) =>
+            String(evt.event_type ?? "").includes("degraded") ||
+            String((evt.event_payload as Record<string, unknown> | undefined)?.flag ?? "").includes("DEGRADED")
+        )) && (
+        <div className="relative z-10 shrink-0 rounded-[10px] border border-[#E0A93D] bg-[#E0A93D]/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#E0A93D]/40 bg-[#E0A93D]/20 text-[#E0A93D] shrink-0 mt-0.5">
+              <AlertTriangle size={18} />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-[#E0A93D] uppercase tracking-wider flex items-center gap-2">
+                <span>DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION</span>
+              </div>
+              <p className="text-[11px] text-[#E8EDF1]/80 mt-0.5 font-sans">
+                The LLM provider was unavailable during document parsing. Structured field extraction operated in regex fallback mode. Confidence metrics reflect system degradation rather than applicant defect.
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 font-mono text-[10px] font-bold text-[#E0A93D] border border-[#E0A93D]/40 bg-[#E0A93D]/20 px-2.5 py-1 rounded-[4px] uppercase">
+            SYSTEM DEGRADED
+          </span>
+        </div>
+      )}
+
       {/* Viewport Center: Forensic Split View (Left Docs / Right Extracted Matrix) */}
       {/* items-start prevents columns from stretching to each other's height */}
       <div className="relative z-10 grid gap-3 lg:grid-cols-12 lg:items-start">

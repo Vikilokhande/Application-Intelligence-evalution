@@ -55,9 +55,21 @@ class NormalizationService:
         form_data = application.form_data or {}
         for source_field, profile_field in FORM_FIELD_MAP.items():
             if source_field in form_data and form_data[source_field] not in (None, ""):
+                val = form_data[source_field]
+                if profile_field == "project_cost":
+                    try:
+                        val = float(val)
+                    except (ValueError, TypeError):
+                        pass
+                elif profile_field == "duration_months":
+                    try:
+                        val = int(val)
+                    except (ValueError, TypeError):
+                        pass
+
                 raw_values[profile_field].append(
                     {
-                        "value": form_data[source_field],
+                        "value": val,
                         "source": "application_form_json",
                         "document_id": None,
                         "filename": "web/mobile form JSON",
@@ -116,7 +128,11 @@ class NormalizationService:
             values = raw_values.get(field, [])
             if not values:
                 return None
-            return sorted(values, key=lambda item: item.get("confidence", 0), reverse=True)[0]["value"]
+            # Filter out null / empty values first (per-field null-aware merge priority)
+            valid_values = [v for v in values if v.get("value") not in (None, "")]
+            if not valid_values:
+                return None
+            return sorted(valid_values, key=lambda item: item.get("confidence", 0), reverse=True)[0]["value"]
 
         def field_payload(field: str) -> dict[str, Any]:
             return {
