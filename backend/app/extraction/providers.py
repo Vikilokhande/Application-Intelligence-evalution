@@ -16,6 +16,7 @@ Test-only mock providers live under backend/tests/fixtures, not in application c
 from __future__ import annotations
 
 import csv
+import email.utils
 import io
 import json
 import logging
@@ -25,10 +26,72 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_retry_after(value: Any) -> float | None:
+    """Parse Retry-After header seconds or HTTP-date into a non-negative delay."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        pass
+    try:
+        retry_at = email.utils.parsedate_to_datetime(raw)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+
+
+def _response_retry_after(exc: Exception) -> float | None:
+    # 1. Check HTTP headers on response or exception
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        headers = getattr(exc, "headers", None)
+    if headers is not None:
+        getter = getattr(headers, "get", None)
+        if callable(getter):
+            val = _parse_retry_after(getter("Retry-After") or getter("retry-after"))
+            if val is not None:
+                return val
+
+    # 2. Check OpenAI API body / exception JSON metadata (common for OpenRouter 429)
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error", {})
+        if isinstance(err, dict):
+            meta = err.get("metadata", {})
+            if isinstance(meta, dict):
+                sec = meta.get("retry_after_seconds") or meta.get("retry_after")
+                if sec is not None:
+                    try:
+                        return max(0.0, float(sec))
+                    except (ValueError, TypeError):
+                        pass
+                hdrs = meta.get("headers", {})
+                if isinstance(hdrs, dict):
+                    h_val = hdrs.get("Retry-After") or hdrs.get("retry-after")
+                    if h_val is not None:
+                        val = _parse_retry_after(h_val)
+                        if val is not None:
+                            return val
+    return None
+
+
+def _infer_status_code(message: str) -> int | None:
+    match = re.search(r"\b([45][0-9]{2})\b", message)
+    return int(match.group(1)) if match else None
 
 
 def detect_tesseract_cmd(configured_path: str = "") -> str:
@@ -526,7 +589,8 @@ Return only the summary text, no markdown."""
         temperature: float = 0.0,
         timeout: int = 60,
         max_tokens: int = 4096,
-        max_retries: int = 3,
+        max_retries: int = 2,
+        retry_backoff_seconds: float = 3.0,
     ) -> None:
         if not api_key:
             from app.core.exceptions import LLMProviderError
@@ -537,9 +601,10 @@ Return only the summary text, no markdown."""
         self.temperature = temperature
         self.timeout = timeout
         self.max_tokens = max_tokens
-        self.max_retries = max_retries
+        self.max_retries = max(0, int(max_retries))
+        self.retry_backoff_seconds = max(0.1, float(retry_backoff_seconds))
 
-    def _call_api(
+    def _call_api_legacy(
         self,
         messages: list[dict[str, str]],
         json_mode: bool = False,
@@ -630,6 +695,133 @@ Return only the summary text, no markdown."""
             provider="openrouter",
         ) from last_error
 
+    def _call_api(
+        self,
+        messages: list[dict[str, str]],
+        json_mode: bool = False,
+        correlation_id: str = "",
+        backoff_base: float | None = None,
+        log_scope: str = "LLM",
+    ) -> str:
+        """
+        Call the LLM API with bounded retry handling.
+
+        max_retries means retries after the initial attempt, so the default of 2
+        gives at most 3 attempts per model.
+        """
+        from app.core.exceptions import LLMProviderError
+
+        last_error: Exception | None = None
+        last_status_code: int | None = None
+        last_retry_after: float | None = None
+        scope = (log_scope or "LLM").strip()
+        base_delay = max(0.1, float(backoff_base if backoff_base is not None else self.retry_backoff_seconds))
+        max_attempts = self.max_retries + 1
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                logger.info(
+                    "[%s] model=%s attempt=%d status=STARTED corr=%s",
+                    scope,
+                    self.model,
+                    attempt,
+                    correlation_id or "-",
+                )
+                content = self._call_via_openai_sdk(messages, json_mode)
+                logger.info(
+                    "[%s] model=%s attempt=%d status=SUCCESS",
+                    scope,
+                    self.model,
+                    attempt,
+                )
+                return content
+            except LLMProviderError as exc:
+                last_error = exc
+                msg = exc.message
+                last_status_code = exc.status_code or _infer_status_code(msg)
+                last_retry_after = exc.retry_after
+                has_retry = attempt < max_attempts
+
+                if last_status_code in (400, 401, 403, 404) or any(code in msg for code in ("400", "401", "403", "404")):
+                    logger.error(
+                        "[%s] model=%s attempt=%d status=FAILED status_code=%s",
+                        scope,
+                        self.model,
+                        attempt,
+                        last_status_code or "client_error",
+                    )
+                    break
+
+                is_rate_limit = (
+                    last_status_code == 429
+                    or "429" in msg
+                    or "rate limit" in msg.lower()
+                    or "rate_limit" in msg.lower()
+                )
+                if is_rate_limit:
+                    delay = min(
+                        30.0,
+                        last_retry_after
+                        if last_retry_after is not None
+                        else base_delay * (2 ** (attempt - 1)),
+                    )
+                    logger.warning(
+                        "[%s] model=%s attempt=%d status=RATE_LIMITED retry_after=%.1f",
+                        scope,
+                        self.model,
+                        attempt,
+                        delay,
+                    )
+                    if has_retry:
+                        time.sleep(delay)
+                        continue
+                    logger.warning(
+                        "[%s] model=%s attempt=%d status=FAILED status_code=429",
+                        scope,
+                        self.model,
+                        attempt,
+                    )
+                    break
+
+                delay = min(30.0, base_delay * (2 ** (attempt - 1)))
+                logger.warning(
+                    "[%s] model=%s attempt=%d status=FAILED status_code=%s retry_delay=%.1f error=%.150s",
+                    scope,
+                    self.model,
+                    attempt,
+                    last_status_code or "unknown",
+                    delay if has_retry else 0.0,
+                    msg,
+                )
+                if has_retry:
+                    time.sleep(delay)
+                    continue
+                break
+            except Exception as exc:
+                last_error = exc
+                has_retry = attempt < max_attempts
+                delay = min(30.0, base_delay * (2 ** (attempt - 1)))
+                logger.warning(
+                    "[%s] model=%s attempt=%d status=FAILED status_code=unknown retry_delay=%.1f error_type=%s",
+                    scope,
+                    self.model,
+                    attempt,
+                    delay if has_retry else 0.0,
+                    type(exc).__name__,
+                )
+                if has_retry:
+                    time.sleep(delay)
+                    continue
+                break
+
+        raise LLMProviderError(
+            f"LLM model '{self.model}' failed after {max_attempts} attempt(s): {last_error}",
+            provider="openrouter",
+            status_code=last_status_code,
+            retry_after=last_retry_after,
+            model=self.model,
+        ) from last_error
+
     def _call_via_openai_sdk(self, messages: list[dict[str, str]], json_mode: bool = False) -> str:
         """Use the openai Python SDK which properly handles headers and avoids Cloudflare blocks."""
         from app.core.exceptions import LLMProviderError
@@ -665,13 +857,35 @@ Return only the summary text, no markdown."""
             response = client.chat.completions.create(**kwargs)
             return response.choices[0].message.content or ""
         except AuthenticationError as exc:
-            raise LLMProviderError(f"Authentication failed (401): {exc}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"Authentication failed (401): {exc}",
+                provider="openrouter",
+                status_code=getattr(exc, "status_code", 401) or 401,
+                retry_after=_response_retry_after(exc),
+                model=self.model,
+            ) from exc
         except RateLimitError as exc:
-            raise LLMProviderError(f"Rate limit exceeded (429): {exc}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"Rate limit exceeded (429): {exc}",
+                provider="openrouter",
+                status_code=getattr(exc, "status_code", 429) or 429,
+                retry_after=_response_retry_after(exc),
+                model=self.model,
+            ) from exc
         except APIError as exc:
-            raise LLMProviderError(f"API error ({exc.status_code}): {exc.message}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"API error ({exc.status_code}): {exc.message}",
+                provider="openrouter",
+                status_code=getattr(exc, "status_code", None),
+                retry_after=_response_retry_after(exc),
+                model=self.model,
+            ) from exc
         except Exception as exc:
-            raise LLMProviderError(f"OpenAI SDK error: {exc}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"OpenAI SDK error: {exc}",
+                provider="openrouter",
+                model=self.model,
+            ) from exc
 
     def _call_via_urllib(self, messages: list[dict[str, str]], json_mode: bool = False) -> str:
         """Fallback: raw urllib request (may be blocked by some CDN configurations)."""
@@ -704,9 +918,19 @@ Return only the summary text, no markdown."""
             return result["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="ignore")
-            raise LLMProviderError(f"HTTP {exc.code}: {err_body[:300]}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"HTTP {exc.code}: {err_body[:300]}",
+                provider="openrouter",
+                status_code=exc.code,
+                retry_after=_parse_retry_after(exc.headers.get("Retry-After") if exc.headers else None),
+                model=self.model,
+            ) from exc
         except Exception as exc:
-            raise LLMProviderError(f"urllib request failed: {exc}", provider="openrouter") from exc
+            raise LLMProviderError(
+                f"urllib request failed: {exc}",
+                provider="openrouter",
+                model=self.model,
+            ) from exc
 
     @staticmethod
     def _extract_json_from_text(text: str) -> dict[str, Any]:
@@ -775,7 +999,8 @@ Return only the summary text, no markdown."""
             )
             raise LLMProviderError(
                 f"LLM returned invalid JSON for extraction: {exc}",
-                provider="groq",
+                provider="openrouter",
+                model=self.model,
             ) from exc
 
     def classify_document(self, text: str, filename: str, declared_type: str) -> dict[str, Any]:
@@ -794,20 +1019,78 @@ Return only the summary text, no markdown."""
                 "confidence": float(result.get("confidence", 0.5)),
                 "reason": result.get("reason", ""),
                 "signals": result.get("signals", []),
-                "provider": "groq",
+                "provider": "openrouter",
                 "model": self.model,
             }
         except json.JSONDecodeError as exc:
             logger.warning("LLM classify_document JSON parse failed: %s | raw=%.200s", exc, raw)
             raise LLMProviderError(
                 f"LLM returned invalid JSON for classification: {exc}",
-                provider="groq",
+                provider="openrouter",
+                model=self.model,
             ) from exc
 
 
 # ---------------------------------------------------------------------------
 # Real Embedding Provider — Sentence Transformers
 # ---------------------------------------------------------------------------
+
+
+class FallbackLLMProvider(LLMProvider):
+    """Try primary first, then the configured fallback model after primary exhausts retries."""
+
+    def __init__(self, primary: GroqLLMProvider, fallback: GroqLLMProvider | None = None) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.model = primary.model
+
+    def _call_with_fallback(self, operation: str, *args: Any, **kwargs: Any) -> Any:
+        from app.core.exceptions import LLMProviderError
+
+        try:
+            return getattr(self.primary, operation)(*args, **kwargs)
+        except LLMProviderError as primary_exc:
+            if self.fallback is None:
+                raise
+            logger.warning(
+                "[LLM] primary_failed model=%s fallback=%s operation=%s status_code=%s",
+                self.primary.model,
+                self.fallback.model,
+                operation,
+                primary_exc.status_code or "unknown",
+            )
+            try:
+                return getattr(self.fallback, operation)(*args, **kwargs)
+            except LLMProviderError as fallback_exc:
+                logger.warning(
+                    "[LLM] model=%s attempt=final status=FAILED operation=%s status_code=%s",
+                    self.fallback.model,
+                    operation,
+                    fallback_exc.status_code or "unknown",
+                )
+                raise LLMProviderError(
+                    (
+                        f"Primary model ({self.primary.model}) and fallback model "
+                        f"({self.fallback.model}) failed. Primary: {primary_exc.message}. "
+                        f"Fallback: {fallback_exc.message}"
+                    ),
+                    provider=fallback_exc.provider or primary_exc.provider or "openrouter",
+                    status_code=fallback_exc.status_code,
+                    retry_after=fallback_exc.retry_after,
+                    model=self.fallback.model,
+                ) from fallback_exc
+
+    def generate(self, prompt: str, system: str = "") -> str:
+        return self._call_with_fallback("generate", prompt, system)
+
+    def summarize(self, text: str) -> str:
+        return self._call_with_fallback("summarize", text)
+
+    def extract_structured(self, text: str, schema_name: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call_with_fallback("extract_structured", text, schema_name, **kwargs)
+
+    def classify_document(self, text: str, filename: str, declared_type: str) -> dict[str, Any]:
+        return self._call_with_fallback("classify_document", text, filename, declared_type)
 
 
 class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
@@ -879,8 +1162,6 @@ def get_llm_provider(settings: Any | None = None) -> LLMProvider:
 
     s = settings or get_settings()
 
-    # Accept openrouter, openai_compatible, and groq (legacy) — all use GroqLLMProvider
-    # because it's a generic OpenAI-compatible client with optional headers.
     if s.llm_provider in ("groq", "openai_compatible", "openrouter"):
         if not s.llm_api_key:
             if s.demo_mode:
@@ -889,7 +1170,7 @@ def get_llm_provider(settings: Any | None = None) -> LLMProvider:
                 f"OPENROUTER_API_KEY is required when LLM_PROVIDER='{s.llm_provider}' "
                 "and DEMO_MODE=false. Set OPENROUTER_API_KEY in your .env file."
             )
-        return GroqLLMProvider(
+        primary = GroqLLMProvider(
             api_key=s.llm_api_key,
             model=s.llm_model,
             base_url=s.llm_base_url,
@@ -897,7 +1178,21 @@ def get_llm_provider(settings: Any | None = None) -> LLMProvider:
             timeout=s.llm_timeout,
             max_tokens=s.llm_max_tokens,
             max_retries=s.llm_max_retries,
+            retry_backoff_seconds=s.llm_retry_backoff_seconds,
         )
+        fallback = None
+        if s.llm_fallback_model and s.llm_fallback_model != s.llm_model:
+            fallback = GroqLLMProvider(
+                api_key=s.llm_api_key,
+                model=s.llm_fallback_model,
+                base_url=s.llm_base_url,
+                temperature=s.llm_temperature,
+                timeout=s.llm_timeout,
+                max_tokens=s.llm_max_tokens,
+                max_retries=s.llm_max_retries,
+                retry_backoff_seconds=s.llm_retry_backoff_seconds,
+            )
+        return FallbackLLMProvider(primary, fallback) if fallback else primary
 
     raise ConfigurationError(f"Unsupported LLM_PROVIDER: '{s.llm_provider}'. Supported: openrouter, openai_compatible")
 

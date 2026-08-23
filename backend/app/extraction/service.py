@@ -538,14 +538,26 @@ class DocumentIntelligenceService:
         merged_fields = _merge_fields(llm_fields, regex_fields)
         document.metadata_json["llm_status"] = llm_status
 
-        # ── 7. LLM summary ────────────────────────────────────────────────────
+        # ── 7. Summary generation (reuse extracted fields to avoid redundant LLM burst) ───
         summary = ""
-        if text.strip():
-            try:
-                summary = self._get_llm().summarize(text)
-            except LLMProviderError as exc:
-                logger.warning("LLM summarize failed doc=%s: %s", document.id, exc)
-                summary = f"Summary unavailable: {exc.code}"
+        applicant = merged_fields.get("applicant_name", {}).get("value") if isinstance(merged_fields.get("applicant_name"), dict) else None
+        proj_title = merged_fields.get("project_title", {}).get("value") if isinstance(merged_fields.get("project_title"), dict) else None
+        proj_cost = merged_fields.get("project_cost", {}).get("value") if isinstance(merged_fields.get("project_cost"), dict) else None
+        duration = merged_fields.get("duration_months", {}).get("value") if isinstance(merged_fields.get("duration_months"), dict) else None
+
+        if applicant or proj_title or proj_cost:
+            parts = []
+            if applicant:
+                parts.append(f"Applicant: {applicant}")
+            if proj_title:
+                parts.append(f"Project: {proj_title}")
+            if proj_cost:
+                parts.append(f"Cost: {proj_cost}")
+            if duration:
+                parts.append(f"Duration: {duration} months")
+            summary = " | ".join(parts)
+        elif text.strip():
+            summary = text.strip()[:250].replace("\n", " ") + ("..." if len(text.strip()) > 250 else "")
 
         # ── 8. Confidence calculation ──────────────────────────────────────────
         confidence = self._calc_confidence(merged_fields, text)
@@ -607,6 +619,16 @@ class DocumentIntelligenceService:
             document.document_type,
             text,
         )
+
+        # High confidence heuristic match — avoid redundant LLM classification call
+        if heuristic_confidence >= 0.85 and heuristic_type != "UNKNOWN":
+            return heuristic_type, {
+                "classification_provider": "content_filename_heuristic",
+                "classification_confidence": heuristic_confidence,
+                "classification_reason": "High-confidence heuristic match",
+                "classification_signals": heuristic_signals,
+                "classification_method": "deterministic_heuristic",
+            }
 
         try:
             llm = self._get_llm()

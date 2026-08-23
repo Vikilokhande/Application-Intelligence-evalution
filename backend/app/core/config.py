@@ -32,8 +32,8 @@ class Settings(BaseSettings):
 
     # ── LLM Provider ─────────────────────────────────────────────────────────
     llm_provider: str = "openai_compatible"   # openai_compatible | openrouter | none
-    llm_model: str = "google/gemma-4-26b-a4b-it:free"   # primary model
-    llm_fallback_model: str = "openrouter/auto"          # fallback on 429/unavailable
+    llm_model: str = "z-ai/glm-5.2:free"      # primary model
+    llm_fallback_model: str = "openrouter/auto"  # automatic fallback on 429/unavailable
     llm_base_url: str = "https://openrouter.ai/api/v1"
     # API key resolution order: OPENROUTER_API_KEY > GROQ_API_KEY > QROQ_API_KEY > LLM_API_KEY
     llm_api_key: str = ""
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     llm_retry_backoff_seconds: float = 3.0   # base backoff; doubles each retry, capped at 30s
     # Reasoning model — used ONLY for post-XGBoost AI explanation call
     # If this model fails, AI reasoning = UNAVAILABLE. XGBoost+RAG results preserved.
-    groq_reasoning_model: str = "google/gemma-4-26b-a4b-it:free"  # override via GROQ_REASONING_MODEL
+    groq_reasoning_model: str = "z-ai/glm-5.2:free"  # override via GROQ_REASONING_MODEL
 
     # ── OCR ───────────────────────────────────────────────────────────────────
     ocr_enabled: bool = True

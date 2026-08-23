@@ -20,5 +20,8 @@ frontend/dist/
 backend/.coverage
 data/startup_probe/
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.log
 Application-Intelligence-evalution/
