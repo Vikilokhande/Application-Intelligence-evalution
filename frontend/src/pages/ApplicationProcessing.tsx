@@ -2,9 +2,10 @@
 // Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
 // No bright green highlights. Clean, elegant government pipeline.
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Check, CheckCircle2, Loader2, PlayCircle, Sparkles,
-  ShieldCheck, ArrowRight, Layers, FileCheck, Award,
+  ShieldCheck, ArrowRight, Layers, FileCheck, Award, X,
 } from "lucide-react";
 import { PageHeader } from "../components/ui";
 import { StatusBadge } from "../components/StatusBadge";
@@ -56,6 +57,7 @@ export function ApplicationProcessing({
   onProcess: () => Promise<void>;
 }) {
   const [activeStageIdx, setActiveStageIdx] = useState<number>(0);
+  const [dismissed, setDismissed]           = useState<boolean>(false);
 
   const ps = (detail?.processing_status ?? "NOT_STARTED").toUpperCase();
   const st = (detail?.status ?? "").toUpperCase();
@@ -68,6 +70,7 @@ export function ApplicationProcessing({
   // Travelling animation ticker during execution
   useEffect(() => {
     if (busy) {
+      setDismissed(false);
       setActiveStageIdx(0);
       const interval = setInterval(() => {
         setActiveStageIdx((prev) => {
@@ -297,24 +300,35 @@ export function ApplicationProcessing({
       </div>
 
       {/* ── Focused Fullscreen Blur Modal During Pipeline Execution ─────────────────────────────── */}
-      {isProcessing && (
+      {isProcessing && !dismissed && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 animate-fade-in select-none"
           style={{
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
-            backgroundColor: "rgba(10, 36, 63, 0.70)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            backgroundColor: "rgba(7, 26, 43, 0.75)",
           }}
         >
-          <div className="w-full max-w-lg rounded-2xl border border-white/20 bg-white shadow-2xl overflow-hidden animate-slide-up">
+          <div className="w-full max-w-lg rounded-2xl border border-white/20 bg-white shadow-2xl overflow-hidden animate-slide-up relative">
             {/* Modal Header in Deep Navy */}
-            <div className="bg-[#0A243F] p-6 text-white space-y-3">
+            <div className="bg-[#0A243F] p-6 text-white space-y-3 relative">
               <div className="flex items-center justify-between">
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-[#D5A51A]/40 bg-[#D5A51A]/20 px-3 py-1 text-xs font-bold text-[#D5A51A]">
                   <Sparkles size={13} />
                   <span>STEP {currentStage.stepNum} OF 08 · EXECUTING</span>
                 </div>
-                <Loader2 size={18} className="animate-spin text-[#D5A51A]" />
+                <div className="flex items-center gap-2">
+                  <Loader2 size={18} className="animate-spin text-[#D5A51A]" />
+                  <button
+                    type="button"
+                    onClick={() => setDismissed(true)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 text-slate-300 hover:bg-white/10 hover:text-white transition focus:outline-none"
+                    title="Stop / Close loading view"
+                    aria-label="Close loading overlay"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -327,8 +341,17 @@ export function ApplicationProcessing({
               </div>
             </div>
 
-            {/* Modal Body: Travelling Progress Bar & Pulse */}
+            {/* Modal Body: Centered Loader Spinner & Travelling Progress */}
             <div className="p-6 bg-[#F8F9FA] space-y-5">
+              {/* Centered Large Spinner Indicator */}
+              <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                <div className="relative flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full border-4 border-[#0A243F]/20 border-t-[#D5A51A] animate-spin" />
+                  <Sparkles size={18} className="absolute text-[#0A243F]" />
+                </div>
+                <p className="text-xs font-bold text-[#0A243F] uppercase tracking-wider">Processing Application Package…</p>
+              </div>
+
               {/* Progress track */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold text-[#66717C]">
@@ -370,7 +393,8 @@ export function ApplicationProcessing({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

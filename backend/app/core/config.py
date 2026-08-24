@@ -92,6 +92,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480
 
+    # ── SMTP Mail Settings ───────────────────────────────────────────────────
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_pass: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -102,14 +111,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_api_key(self) -> "Settings":
-        """Normalise API key — OpenRouter key takes priority, then Groq/QROQ fallbacks."""
+        """Normalise API key & SMTP password aliases."""
         if not self.llm_api_key:
-            # Prefer OpenRouter key if set, then canonical Groq key, then legacy typo var
             self.llm_api_key = (
                 self.openrouter_api_key
                 or self.groq_api_key
                 or self.qroq_api_key
             )
+        if not self.smtp_password:
+            self.smtp_password = self.smtp_pass
         return self
 
     @property

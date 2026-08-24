@@ -117,6 +117,11 @@ export const api = {
   searchKnowledge: (query: string) =>
     request<KnowledgeResult[]>(
       `/knowledge/search?q=${encodeURIComponent(query)}`
-    )
+    ),
+  sendReportEmail: (applicationId: string, recipientEmail?: string) =>
+    request<{ status: string; recipient_email: string }>(`/applications/${applicationId}/send-report`, {
+      method: "POST",
+      body: JSON.stringify({ recipient_email: recipientEmail })
+    })
 };
 

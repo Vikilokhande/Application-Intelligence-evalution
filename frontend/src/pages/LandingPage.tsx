@@ -54,12 +54,6 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
         <div className="flex items-center gap-6">
           <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-[#CBD5E1]">
             <button
-              onClick={scrollToTop}
-              className="hover:text-[#FFFFFF] transition-colors focus:outline-none"
-            >
-              Home
-            </button>
-            <button
               onClick={scrollToHowItWorks}
               className="hover:text-[#FFFFFF] transition-colors focus:outline-none"
             >

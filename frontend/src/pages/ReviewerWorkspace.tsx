@@ -6,8 +6,9 @@ import type { FormEvent } from "react";
 import {
   AlertTriangle, BarChart3, BookOpen, CheckCircle2, ClipboardList,
   Copy, ExternalLink, Mail, MessageSquare, Sparkles, UserCheck,
-  ShieldCheck, FileText, ArrowRight,
+  ShieldCheck, FileText, ArrowRight, Loader2, Send, X,
 } from "lucide-react";
+import { api } from "../services/api";
 import {
   EmptyState, PageHeader,
   RecommendationBadge, RiskBadge,
@@ -121,6 +122,7 @@ export function ReviewerWorkspace({
   const [feedbackComment,  setFeedbackComment]  = useState("");
   const [submitted,        setSubmitted]        = useState(false);
   const [showConclusion,   setShowConclusion]   = useState(false);
+  const [showMailModal,    setShowMailModal]    = useState(false);
   const [copied,           setCopied]           = useState(false);
 
   if (!detail) {
@@ -454,15 +456,26 @@ export function ReviewerWorkspace({
             </form>
           </div>
 
-          {/* Send Conclusion Action Button */}
-          <button
-            type="button"
-            onClick={() => setShowConclusion(true)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-3 text-xs font-bold text-[#0A243F] hover:bg-[#F8F9FA] hover:border-[#0A243F] transition shadow-2xs"
-          >
-            <Mail size={14} className="text-[#D5A51A]" />
-            <span>Generate &amp; Copy Conclusion Report</span>
-          </button>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowMailModal(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#0A243F] py-3 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs"
+            >
+              <Mail size={15} className="text-[#D5A51A]" />
+              <span>Email Report</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowConclusion(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-2.5 text-xs font-bold text-[#0A243F] hover:bg-[#F8F9FA] hover:border-[#0A243F] transition shadow-2xs"
+            >
+              <Copy size={14} className="text-[#0A243F]" />
+              <span>Generate &amp; Copy Conclusion Report</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -481,6 +494,14 @@ export function ReviewerWorkspace({
             });
           }}
           onClose={() => setShowConclusion(false)}
+        />
+      )}
+
+      {/* ── Get Report on Mail Modal ────────────────────────────────────── */}
+      {showMailModal && (
+        <MailReportModal
+          detail={detail}
+          onClose={() => setShowMailModal(false)}
         />
       )}
     </div>
@@ -606,6 +627,125 @@ function ConclusionModal({
             {copied ? "Copied to Clipboard!" : "Copy Report"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Mail Report Modal ──────────────────────────────────────────────── */
+function MailReportModal({
+  detail,
+  onClose,
+}: {
+  detail: ApplicationDetail;
+  onClose: () => void;
+}) {
+  const initialEmail = (detail.form_data?.applicant_email as string | undefined) || "";
+  const [email, setEmail]         = useState(initialEmail);
+  const [sending, setSending]     = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  async function handleSend(e: FormEvent) {
+    e.preventDefault();
+    if (!email || !email.includes("@")) {
+      setStatusMsg({ type: "error", msg: "Please enter a valid recipient email address." });
+      return;
+    }
+    setSending(true);
+    setStatusMsg(null);
+    try {
+      const res = await api.sendReportEmail(detail.id, email);
+      setStatusMsg({ type: "success", msg: `Clearance report emailed successfully to ${res.recipient_email}!` });
+    } catch (err) {
+      setStatusMsg({ type: "error", msg: err instanceof Error ? err.message : "Failed to send email report." });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0A243F]/70 backdrop-blur-sm animate-fade-in font-sans">
+      <div className="w-full max-w-md rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl overflow-hidden animate-slide-up">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-[#0A243F] text-white border-b border-[#D5A51A]/40">
+          <div className="flex items-center gap-2.5">
+            <Mail size={18} className="text-[#D5A51A]" />
+            <div>
+              <p className="text-sm font-bold text-white">Email Report</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 text-slate-300 hover:bg-white/10 hover:text-white transition focus:outline-none"
+            aria-label="Close"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSend} className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-[#66717C] uppercase tracking-wider">
+              Recipient Email Address
+            </label>
+            <div className="relative">
+              <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="email"
+                required
+                className="form-input pl-9 text-xs"
+                placeholder="applicant@organization.gov.in"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+            {initialEmail && (
+              <p className="text-[11px] text-slate-400">
+                Pre-filled from application submission data.
+              </p>
+            )}
+          </div>
+
+          {statusMsg && (
+            <div
+              className={`rounded-xl border p-3.5 text-xs font-semibold leading-relaxed ${
+                statusMsg.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-rose-200 bg-rose-50 text-rose-800"
+              }`}
+            >
+              {statusMsg.msg}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-[#66717C] hover:text-[#0A243F]"
+            >
+              Close
+            </button>
+            <button
+              type="submit"
+              disabled={sending}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0A243F] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs disabled:opacity-50"
+            >
+              {sending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin text-[#D5A51A]" />
+                  Sending Email…
+                </>
+              ) : (
+                <>
+                  <Send size={14} className="text-[#D5A51A]" />
+                  Send Report
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

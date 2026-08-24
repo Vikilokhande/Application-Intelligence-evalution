@@ -20,6 +20,52 @@ function fmtDate(iso: string | null | undefined) {
   catch { return iso; }
 }
 
+function cleanCheckName(name: string): string {
+  const map: Record<string, string> = {
+    REQUIRED_FIELD: "Mandatory Field Verification",
+    COMPLETENESS: "Data Completeness Check",
+    BUSINESS_RULE_PRECHECK: "Scheme Rule Pre-Check",
+    CROSS_DOCUMENT_CONSISTENCY: "Cross-Document Consistency Check",
+    FIELD_VALIDATION: "Field Parameter Validation",
+    DATA_RANGE: "Threshold & Cost Range Check",
+    DATA_TYPE: "Data Format Validation",
+  };
+  return map[name] ?? name.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function cleanValidationMessage(message: string | null | undefined): string {
+  if (!message) return "Verification check pending supporting document evidence.";
+  let text = message
+    .replace(/applicant\.name/g, "Applicant Full Name")
+    .replace(/applicant\.organization_type/g, "Organization / Entity Type")
+    .replace(/applicant\.email/g, "Applicant Email Address")
+    .replace(/project\.title/g, "Project Title")
+    .replace(/project\.category/g, "Project Category")
+    .replace(/project\.location/g, "Project Location")
+    .replace(/project\.cost/g, "Estimated Project Cost")
+    .replace(/project\.duration/g, "Project Duration");
+
+  if (text.includes("has only 0 distinct document-derived value(s)")) {
+    const match = text.match(/^(.*?) has only 0/);
+    const fieldName = match ? match[1] : "Field parameter";
+    return `${fieldName}: Awaiting extraction from uploaded documents for cross-verification.`;
+  }
+  if (text.includes("Required evidence unavailable")) {
+    text = text.replace(/\.?\s*Required evidence unavailable\.?/g, "");
+    if (text.includes("is required")) {
+      return `${text}. Please attach supporting clearance certificate or official verification document.`;
+    }
+    if (text.trim()) {
+      return `${text.trim()} (Awaiting supporting document evidence).`;
+    }
+    return "Awaiting supporting document evidence for official verification.";
+  }
+  if (text.includes("Application field completeness is")) {
+    return text.replace("Application field completeness is", "Application parameters completeness rate is");
+  }
+  return text;
+}
+
 function fmtCurrency(v: unknown): string {
   if (v == null || v === "") return "—";
   const n = Number(v);
@@ -426,7 +472,7 @@ export function ApplicationDetails({
                 <tbody className="divide-y divide-slate-100">
                   {[...fails, ...warns, ...passes].map((v, i) => (
                     <tr key={i} className="hover:bg-slate-50 transition">
-                      <td className="px-5 py-3.5 font-semibold text-[#0A2540]">{v.validation_type.replaceAll("_", " ")}</td>
+                      <td className="px-5 py-3.5 font-semibold text-[#0A2540]">{cleanCheckName(v.validation_type)}</td>
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
                           v.status === "PASS"           ? "bg-emerald-100 text-emerald-800" :
@@ -439,7 +485,7 @@ export function ApplicationDetails({
                           {v.status.replaceAll("_", " ")}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-600 text-xs hidden md:table-cell max-w-sm">{v.message || "—"}</td>
+                      <td className="px-5 py-3.5 text-slate-600 text-xs hidden md:table-cell max-w-sm">{cleanValidationMessage(v.message)}</td>
                     </tr>
                   ))}
                 </tbody>

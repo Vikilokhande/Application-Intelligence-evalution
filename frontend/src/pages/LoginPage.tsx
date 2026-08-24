@@ -165,10 +165,7 @@ export function LoginPage({ onLoginSuccess, onBack }: { onLoginSuccess: (user: {
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                 >
-                  <option value="admin" className="bg-white text-[#0F172A]">ADMINISTRATOR</option>
                   <option value="senior_reviewer" className="bg-white text-[#0F172A]">SENIOR REVIEWER</option>
-                  <option value="expert_reviewer" className="bg-white text-[#0F172A]">EXPERT REVIEWER</option>
-                  <option value="normal_reviewer" className="bg-white text-[#0F172A]">CASE REVIEWER</option>
                 </select>
               </label>
             </div>

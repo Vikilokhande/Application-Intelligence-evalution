@@ -18,7 +18,49 @@ import { EmptyState, PageHeader } from "../components/ui";
 import type { ApplicationDetail, ValidationResult } from "../types/api";
 
 function humanLabel(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+  const map: Record<string, string> = {
+    REQUIRED_FIELD: "Mandatory Field Verification",
+    COMPLETENESS: "Data Completeness Check",
+    BUSINESS_RULE_PRECHECK: "Scheme Rule Pre-Check",
+    CROSS_DOCUMENT_CONSISTENCY: "Cross-Document Consistency Check",
+    FIELD_VALIDATION: "Field Parameter Validation",
+    DATA_RANGE: "Threshold & Cost Range Check",
+    DATA_TYPE: "Data Format Validation",
+  };
+  return map[value] ?? value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function cleanValidationMessage(message: string | null | undefined): string {
+  if (!message) return "Verification check pending supporting document evidence.";
+  let text = message
+    .replace(/applicant\.name/g, "Applicant Full Name")
+    .replace(/applicant\.organization_type/g, "Organization / Entity Type")
+    .replace(/applicant\.email/g, "Applicant Email Address")
+    .replace(/project\.title/g, "Project Title")
+    .replace(/project\.category/g, "Project Category")
+    .replace(/project\.location/g, "Project Location")
+    .replace(/project\.cost/g, "Estimated Project Cost")
+    .replace(/project\.duration/g, "Project Duration");
+
+  if (text.includes("has only 0 distinct document-derived value(s)")) {
+    const match = text.match(/^(.*?) has only 0/);
+    const fieldName = match ? match[1] : "Field parameter";
+    return `${fieldName}: Awaiting extraction from uploaded documents for cross-verification.`;
+  }
+  if (text.includes("Required evidence unavailable")) {
+    text = text.replace(/\.?\s*Required evidence unavailable\.?/g, "");
+    if (text.includes("is required")) {
+      return `${text}. Please attach supporting clearance certificate or official verification document.`;
+    }
+    if (text.trim()) {
+      return `${text.trim()} (Awaiting supporting document evidence).`;
+    }
+    return "Awaiting supporting document evidence for official verification.";
+  }
+  if (text.includes("Application field completeness is")) {
+    return text.replace("Application field completeness is", "Application parameters completeness rate is");
+  }
+  return text;
 }
 
 const FIELD_TYPES = [
@@ -241,10 +283,10 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
                     <tr key={i} className="hover:bg-[#F8F9FA] transition">
                       <td className="px-6 py-3.5">
                         <p className="font-semibold text-[#0A243F]">{humanLabel(v.validation_type)}</p>
-                        <p className="text-xs text-[#66717C] lg:hidden mt-0.5">{v.message || "—"}</p>
+                        <p className="text-xs text-[#66717C] lg:hidden mt-0.5">{cleanValidationMessage(v.message)}</p>
                       </td>
                       <td className="px-5 py-3.5 text-xs text-[#071A2B] hidden lg:table-cell max-w-md">
-                        {v.message || "—"}
+                        {cleanValidationMessage(v.message)}
                       </td>
                       <td className="px-5 py-3.5 text-center whitespace-nowrap">
                         <ResultPill status={v.status} />

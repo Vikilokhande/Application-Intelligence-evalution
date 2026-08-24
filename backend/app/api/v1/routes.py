@@ -50,6 +50,7 @@ from app.schemas.application import (
     ValidationResultRead,
 )
 from app.services.processing import application_processing_service
+from app.services.email import send_application_report_email
 from app.services.seed import seed_default_data
 from app.workflow.graph import application_workflow_graph
 from app.validation.service import VALIDATION_VERSION, build_validation_summary
@@ -449,6 +450,38 @@ def delete_application(application_id: str, db: Session = Depends(get_db)) -> di
     db.delete(application)
     db.commit()
     return {"status": "deleted", "id": application_id}
+
+
+@router.post("/applications/{application_id}/send-report")
+def send_report(
+    application_id: str,
+    payload: dict[str, Any] | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    application = application_repository.get_detail(db, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    detail = _application_detail(db, application)
+    recipient = (payload or {}).get("recipient_email") or detail.form_data.get("applicant_email")
+    if not recipient or "@" not in recipient:
+        raise HTTPException(status_code=400, detail="No valid recipient email address provided or found in application.")
+
+    try:
+        send_application_report_email(detail, recipient)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}") from exc
+
+    audit_service.record(
+        db,
+        "report_email_sent",
+        application_id=application.id,
+        payload={"recipient_email": recipient},
+    )
+    db.commit()
+    return {"status": "success", "recipient_email": recipient}
 
 
 

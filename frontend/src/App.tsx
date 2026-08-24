@@ -128,6 +128,7 @@ export default function App() {
       setPage("processing");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create application failed");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -271,7 +272,7 @@ export default function App() {
           <button onClick={() => setError(null)} className="shrink-0 font-bold text-rose-500 hover:text-rose-700 text-base leading-none" aria-label="Dismiss">×</button>
         </div>
       )}
-      {page === "dashboard"  && <Dashboard applications={applications} schemes={schemes} analytics={analytics} onSelect={selectApplication} />}
+      {page === "dashboard"  && <Dashboard applications={applications} schemes={schemes} analytics={analytics} onSelect={selectApplication} onNew={() => setPage("new")} />}
       {page === "new"        && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
       {page === "details"    && <ApplicationDetails detail={detail} schemes={schemes} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}

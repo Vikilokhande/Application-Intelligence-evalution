@@ -78,11 +78,13 @@ export function Dashboard({
   schemes,
   analytics,
   onSelect,
+  onNew,
 }: {
   applications: ApplicationSummary[];
   schemes: SchemeRead[];
   analytics: AnalyticsOverview | null;
   onSelect: (id: string) => void;
+  onNew: () => void;
 }) {
   const [search, setSearch] = useState("");
 
@@ -124,6 +126,7 @@ export function Dashboard({
           <p className="text-sm text-slate-500 mt-0.5">Applications requiring your attention today.</p>
         </div>
         <button
+          onClick={onNew}
           className="inline-flex items-center gap-2 rounded-xl bg-[#0A2540] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d2f50] active:scale-[0.98] transition shadow-sm"
         >
           <FilePlus2 size={15} /> New Application
