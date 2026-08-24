@@ -418,7 +418,12 @@ class ApplicationProcessingService:
             "risk_score": item.risk_score,
             "confidence": item.confidence,
             "prediction_class": item.prediction_class,
-            "feature_contributions": item.feature_contributions,
+            "feature_contributions": {
+                key: value
+                for key, value in (item.feature_contributions or {}).items()
+                if not key.startswith("_")
+            },
+            "class_probabilities": (item.feature_contributions or {}).get("_class_probabilities", {}),
             "status": item.status,
             "provider": provider,
             "model_status": model_status,

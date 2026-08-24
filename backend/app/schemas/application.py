@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer
+
+from app.ml.scoring import FEATURE_NAMES
 
 
 Decision = Literal["APPROVE", "REJECT", "REQUEST_CLARIFICATION", "OVERRIDE_AI_RECOMMENDATION"]
@@ -123,6 +125,36 @@ class PredictionRead(BaseModel):
         if self.provider == "baseline":
             return "BASELINE_FALLBACK"
         return "UNAVAILABLE"
+
+    @computed_field
+    @property
+    def class_probabilities(self) -> dict[str, float]:
+        raw = (self.feature_contributions or {}).get("_class_probabilities")
+        if not isinstance(raw, dict):
+            return {}
+        probabilities: dict[str, float] = {}
+        for key in ("LOW_RISK", "MEDIUM_RISK", "HIGH_RISK"):
+            value = raw.get(key)
+            if value is None:
+                continue
+            try:
+                probabilities[key] = float(value)
+            except (TypeError, ValueError):
+                continue
+        return probabilities
+
+    @field_serializer("feature_contributions")
+    def serialize_feature_contributions(self, value: dict[str, Any]) -> dict[str, float]:
+        clean: dict[str, float] = {}
+        for name in FEATURE_NAMES:
+            raw = (value or {}).get(name)
+            if raw is None:
+                continue
+            try:
+                clean[name] = float(raw)
+            except (TypeError, ValueError):
+                continue
+        return clean
 
 
 class ApplicationDetail(ApplicationSummary):

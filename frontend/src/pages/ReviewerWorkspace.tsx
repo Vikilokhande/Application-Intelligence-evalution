@@ -1,377 +1,414 @@
-// Structural Idea: An authorized reviewer workspace pairing case context and evidence traces on the left with historical audit stream and docked human decision cockpit on the right.
-
-import {
-  CheckCircle2,
-  FileText,
-  MessageSquare,
-  ShieldCheck,
-  Terminal,
-  UserCheck,
-} from "lucide-react";
-import type { FormEvent } from "react";
+// ReviewerWorkspace.tsx — Simplified Decision Cockpit.
+// Shows status + clickable navigation cards for Evidence, Validation, AI Assessment.
+// Removes: Document Status section, Validation Summary section, AI Status section.
+// Keeps: Status row, Why this needs review, Evidence card, Validation card, AI Assessment card, Final Decision.
 import { useState } from "react";
-import { DecisionPanel } from "../components/DecisionPanel";
-import { EvidenceList } from "../components/EvidenceList";
-import type { ApplicationDetail } from "../types/api";
+import type { FormEvent } from "react";
+import {
+  AlertTriangle, BarChart3, BookOpen, CheckCircle2, ClipboardList,
+  ExternalLink, MessageSquare, Sparkles, UserCheck, XCircle,
+} from "lucide-react";
+import {
+  AlertBanner, EmptyState, FindingCard, PageHeader,
+  RecommendationBadge, RiskBadge, TechnicalDetails, TechRow,
+} from "../components/ui";
+import { StatusBadge } from "../components/StatusBadge";
+import type { ApplicationDetail, WorkflowResponse } from "../types/api";
 
+/* ── Helpers ──────────────────────────────────────────────────────── */
+function derivePriority(detail: ApplicationDetail): { label: string; color: string } {
+  const st  = (detail.status ?? "").toUpperCase();
+  const rec = (detail.ai_recommendation ?? "").toUpperCase();
+  const pred = detail.predictions?.[detail.predictions.length - 1];
+  if (!st.includes("AWAITING_HUMAN_REVIEW")) return { label: "—", color: "text-slate-400" };
+  if (pred?.prediction_class === "HIGH_RISK"   || rec.includes("REJECT"))        return { label: "High",   color: "text-rose-600 font-bold" };
+  if (pred?.prediction_class === "MEDIUM_RISK" || rec.includes("CLARIFICATION")) return { label: "Medium", color: "text-amber-600 font-semibold" };
+  if (pred?.prediction_class === "LOW_RISK"    || rec.includes("APPROVE"))       return { label: "Normal", color: "text-emerald-600" };
+  return { label: "—", color: "text-slate-400" };
+}
+
+function pct(v: number | null | undefined) { return v != null && v > 0 ? `${Math.round(v * 100)}%` : "N/A"; }
+
+const DECISION_OPTIONS = [
+  { value: "APPROVE",              label: "✓  Approve",              activeCls: "border-emerald-500 bg-emerald-600 text-white", cls: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" },
+  { value: "REQUEST_CLARIFICATION", label: "⚠  Request Clarification", activeCls: "border-amber-500 bg-amber-500 text-white",   cls: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" },
+  { value: "REJECT",               label: "✕  Reject",               activeCls: "border-rose-500 bg-rose-600 text-white",     cls: "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100" },
+];
+
+/* ── Clickable navigation card ───────────────────────────────────── */
+function NavCard({
+  icon, title, count, countLabel, summary, action, onNavigate,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  count?: number;
+  countLabel?: string;
+  summary: string;
+  action: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onNavigate}
+      className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm p-4 hover:border-teal-300 hover:shadow-md transition-all group"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 border border-teal-100 shrink-0 group-hover:bg-teal-100 transition">
+            {icon}
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-800">{title}</p>
+            {count != null && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                <span className="font-semibold text-slate-700">{count}</span> {countLabel}
+              </p>
+            )}
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">{summary}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-teal-600 text-xs font-semibold shrink-0 mt-1 group-hover:gap-2 transition-all">
+          {action} <ExternalLink size={11} />
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ── Main ────────────────────────────────────────────────────────── */
 export function ReviewerWorkspace({
   detail,
+  workflow,
   onDecision,
   onFeedback,
   busy,
+  onNavigate,
 }: {
   detail: ApplicationDetail | null;
+  workflow?: WorkflowResponse | null;
   onDecision: (payload: Record<string, unknown>) => Promise<void>;
   onFeedback: (payload: Record<string, unknown>) => Promise<void>;
   busy: boolean;
+  onNavigate?: (page: string) => void;
 }) {
+  const [decision,       setDecision]       = useState("REQUEST_CLARIFICATION");
+  const [notes,          setNotes]          = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [feedbackHelpful,setFeedbackHelpful]= useState<"yes" | "no" | null>(null);
+  const [feedbackComment,setFeedbackComment]= useState("");
+  const [submitted,      setSubmitted]      = useState(false);
+
   if (!detail) {
     return (
-      <div className="rounded-[10px] border border-[#22303A] bg-[#131A21] p-8 text-center font-mono text-xs text-[#8B99A6]">
-        NO CASE SELECTED FOR REVIEW. SELECT A CASE FROM THE{" "}
-        <span className="text-[#3DDC84]">DASHBOARD</span> TO ENTER THE REVIEW COCKPIT.
+      <EmptyState
+        icon={<ClipboardList size={24} />}
+        title="No application selected"
+        description="Select an application from the Dashboard to begin your review."
+      />
+    );
+  }
+
+  const pred        = detail.predictions?.[detail.predictions.length - 1];
+  const confidence  = pred && pred.confidence > 0 ? pred.confidence : null;
+  const priority    = derivePriority(detail);
+  const wfState     = (workflow?.state ?? {}) as Record<string, unknown>;
+  const llm         = (wfState.llm_reasoning ?? null) as Record<string, unknown> | null;
+  const keyFindings = (llm?.key_findings as string[] | undefined) ?? [];
+
+  const fails = detail.validation_results.filter(v => v.status === "FAIL");
+  const warns = detail.validation_results.filter(v => v.status === "WARN" || v.status === "NOT_VERIFIABLE");
+  const top5  = [...fails, ...warns].slice(0, 5);
+
+  const meaningfulEvidence = detail.evidence.filter(e => {
+    const m = e.metadata_json as Record<string, unknown> | undefined;
+    return m?.evidence_text || m?.knowledge_base_document;
+  });
+
+  const recNorm  = (detail.ai_recommendation ?? "").toUpperCase();
+  let mappedRec  = "REQUEST_CLARIFICATION";
+  if (recNorm.includes("APPROVE")) mappedRec = "APPROVE";
+  else if (recNorm.includes("REJECT")) mappedRec = "REJECT";
+  const isOverride = decision !== mappedRec && mappedRec !== "REQUEST_CLARIFICATION";
+
+  async function handleDecision(e: FormEvent) {
+    e.preventDefault();
+    await onDecision({
+      reviewer_id: "demo-reviewer",
+      decision,
+      comments: notes,
+      override_ai_recommendation: isOverride,
+      override_reason: isOverride ? overrideReason : null,
+    });
+    setSubmitted(true);
+  }
+
+  async function handleFeedback(e: FormEvent) {
+    e.preventDefault();
+    await onFeedback({
+      reviewer_id: "demo-reviewer",
+      feedback_type: feedbackHelpful === "yes" ? "AI_RECOMMENDATION_CORRECT" : "AI_RECOMMENDATION_INCORRECT",
+      comment: feedbackComment,
+    });
+    setFeedbackHelpful(null);
+    setFeedbackComment("");
+  }
+
+  if (submitted) {
+    return (
+      <div className="max-w-[600px] mx-auto mt-20 text-center space-y-5 animate-slide-up">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <CheckCircle2 size={32} className="text-emerald-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900">Decision Recorded</h2>
+        <p className="text-slate-500 text-sm">Your decision has been submitted and recorded in the audit log.</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex flex-col gap-3 font-sans text-[#E8EDF1] max-w-[1400px] mx-auto pb-4">
-      {/* Topographic Contour Background Layer Signature Motif */}
-      <div
-        className="pointer-events-none absolute -inset-4 z-0 overflow-hidden opacity-[0.08]"
-        aria-hidden="true"
-      >
-        <svg
-          className="h-full w-full"
-          xmlns="http://www.w3.org/2000/svg"
-          width="100%"
-          height="100%"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M 0,80 Q 250,40 500,110 T 1000,70 M 0,190 Q 300,150 600,220 T 1000,180 M 0,300 Q 200,270 500,330 T 1000,290"
-            fill="none"
-            stroke="#3DDC84"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M 0,130 Q 350,170 700,110 T 1000,190 M 0,240 Q 200,280 500,230 T 1000,280 M 0,370 Q 450,400 800,350 T 1000,420"
-            fill="none"
-            stroke="#22303A"
-            strokeWidth="2"
-          />
-        </svg>
+    <div className="max-w-[1100px] mx-auto space-y-5 animate-slide-up">
+      <PageHeader
+        title="Reviewer Workspace"
+        subtitle={`${detail.project_title ?? "Untitled"} — ${detail.applicant_name ?? ""}`}
+        breadcrumb="Case Review"
+        actions={<StatusBadge value={detail.status} />}
+      />
+
+      {/* ── L1: Status strip ─────────────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        <Tile label="Status">
+          <StatusBadge value={detail.status} />
+        </Tile>
+        <Tile label="AI Recommendation">
+          <RecommendationBadge value={detail.ai_recommendation} />
+        </Tile>
+        <Tile label="Risk">
+          <RiskBadge value={pred?.prediction_class} />
+        </Tile>
+        <Tile label="Priority">
+          <span className={`text-sm font-bold ${priority.color}`}>{priority.label}</span>
+        </Tile>
       </div>
 
-      {/* Reviewer Workspace Telemetry Header Strip */}
-      <div className="relative z-10 shrink-0 rounded-[10px] border border-[#22303A] bg-[#131A21] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#3DDC84] shrink-0">
-            <Terminal size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-mono text-sm font-bold tracking-wider text-[#E8EDF1] uppercase truncate">
-                AI-ASSISTED REVIEW COCKPIT
-              </h1>
-              <span className="font-mono text-[10px] font-semibold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-2 py-0.5 rounded-[4px] shrink-0">
-                HUMAN AUTHORITY ACTIVE
-              </span>
-            </div>
-            <p className="text-xs text-[#8B99A6] mt-0.5 truncate">
-              Review case context, evidence findings, and render authorized human determination for:{" "}
-              <strong className="text-[#E8EDF1]">
-                {detail.project_title ?? "Selected Case"}
-              </strong>
-            </p>
-          </div>
-        </div>
+      <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
 
-        <div className="flex items-center gap-2 font-mono text-xs border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 rounded-[6px] shrink-0">
-          <UserCheck size={14} className="text-[#3DDC84]" />
-          <span className="text-[#3DDC84] font-bold uppercase">
-            AUTHORIZED WORKSPACE
-          </span>
-        </div>
-      </div>
+        {/* ── Left: Info + Navigation cards ───────────────────────── */}
+        <div className="space-y-5">
 
-      {/* Main Forensic Analysis & Decision Cockpit Layout */}
-      <div className="relative z-10 grid gap-3 lg:grid-cols-12 lg:items-start">
-        {/* LEFT COLUMN (5 Cols): Case Profile & Attached Documents */}
-        <div className="lg:col-span-5 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              1. CASE PROFILE & DOCUMENTS
-            </h2>
-            <span className="font-mono text-[10px] text-[#8B99A6]">METADATA</span>
-          </div>
-
-          <div className="relative flex-1 min-h-0">
-            <div
-              className="p-3.5 space-y-3 overflow-y-auto max-h-[calc(100vh-260px)]"
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(61,220,132,0.4) #22303A",
-              }}
-            >
-              {/* Case Profile Card */}
-              <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 space-y-2.5 font-mono text-xs">
-                <Field label="APPLICANT NAME" value={detail.applicant_name ?? "PENDING"} />
-                <Field label="PROJECT TITLE" value={detail.project_title ?? "UNTITLED"} />
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#22303A]">
-                  <Field label="CATEGORY" value={detail.project_category ?? "UNASSIGNED"} />
-                  <div>
-                    <span className="block text-[10px] font-bold text-[#8B99A6] uppercase mb-1">
-                      CURRENT STATUS
-                    </span>
-                    <span className="inline-block font-bold px-2 py-0.5 rounded border border-[#3DDC84]/30 bg-[#3DDC84]/10 text-[#3DDC84] text-[10px] uppercase truncate max-w-full">
-                      {detail.status.replaceAll("_", " ")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reviewer Assignment Escalate Card */}
-              <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 space-y-1.5 font-mono text-xs">
-                <div className="font-bold text-[#E8EDF1] uppercase flex items-center gap-1.5">
-                  <UserCheck size={14} className="text-[#3DDC84]" />
-                  <span>
-                    {String(
-                      detail.reviewer_assignment?.reviewer_role ??
-                        "SENIOR REVIEWER"
-                    ).replaceAll("_", " ")}
+          {/* Why this needs review */}
+          {(top5.length > 0 || keyFindings.length > 0) && (
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-card-in">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+                <AlertTriangle size={14} className="text-amber-500" />
+                <h2 className="text-sm font-bold text-slate-800">Why This Needs Review</h2>
+                {top5.length > 0 && (
+                  <span className="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                    {top5.length} issue{top5.length !== 1 ? "s" : ""}
                   </span>
-                </div>
-                <p className="text-[11px] text-[#8B99A6] font-sans leading-relaxed">
-                  {String(
-                    detail.reviewer_assignment?.routing_reason ??
-                      "Routed according to Directorate scheme escalation guidelines."
-                  )}
-                </p>
+                )}
               </div>
-
-              {/* Case Documents List */}
-              <div className="space-y-2 font-mono text-xs">
-                <div className="font-bold text-[#8B99A6] text-[10px] uppercase flex items-center justify-between">
-                  <span>ATTACHED DOCUMENTS ({detail.documents.length})</span>
-                  <span className="text-[#3DDC84]">VERIFIED</span>
-                </div>
-
-                <div className="space-y-1.5">
-                  {detail.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-2.5 flex items-center justify-between gap-2"
-                    >
-                      <span className="font-semibold text-[#E8EDF1] truncate flex items-center gap-1.5">
-                        <FileText size={14} className="text-[#3DDC84] shrink-0" />
-                        <span className="truncate">{doc.filename}</span>
-                      </span>
-                      <span className="text-[9px] text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-1.5 py-0.5 rounded uppercase shrink-0">
-                        {doc.processing_status}
-                      </span>
-                    </div>
-                  ))}
-
-                  {!detail.documents.length && (
-                    <div className="py-4 text-center text-[#8B99A6] border border-dashed border-[#22303A] rounded">
-                      NO ATTACHED DOCUMENTS
-                    </div>
-                  )}
-                </div>
+              <div className="p-4 space-y-2">
+                {top5.map((f, i) => (
+                  <FindingCard
+                    key={i}
+                    status={f.status}
+                    title={f.validation_type.replaceAll("_", " ")}
+                    message={f.message}
+                  />
+                ))}
+                {keyFindings.slice(0, top5.length === 0 ? 5 : 2).map((f, i) => (
+                  <div key={`kf-${i}`} className="flex items-start gap-2 text-sm text-slate-600 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    <CheckCircle2 size={13} className="text-teal-500 shrink-0 mt-0.5" />
+                    {f}
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#131A21] to-transparent z-10" />
+          )}
+
+          {/* Navigation cards */}
+          <div className="space-y-3">
+            {/* Evidence */}
+            <NavCard
+              icon={<BookOpen size={16} className="text-teal-600" />}
+              title="Scheme Evidence"
+              count={meaningfulEvidence.length}
+              countLabel="evidence items"
+              summary={meaningfulEvidence.length > 0
+                ? "View the scheme guidelines and evidence used to assess this application."
+                : "Evidence could not be retrieved for this application."}
+              action="View Evidence"
+              onNavigate={() => onNavigate?.("details")}
+            />
+
+            {/* Validation */}
+            <NavCard
+              icon={<CheckCircle2 size={16} className="text-emerald-600" />}
+              title="Validation"
+              count={fails.length + warns.length}
+              countLabel={`issue${(fails.length + warns.length) !== 1 ? "s" : ""} found`}
+              summary={`${detail.validation_results.length} checks run — ${fails.length} failed, ${warns.length} need verification.`}
+              action="View Validation"
+              onNavigate={() => onNavigate?.("validation")}
+            />
+
+            {/* AI Assessment */}
+            <NavCard
+              icon={<BarChart3 size={16} className="text-violet-600" />}
+              title="AI Assessment"
+              count={confidence ? Math.round(confidence * 100) : undefined}
+              countLabel="% confidence"
+              summary="View risk score, key factors, and detailed AI reasoning."
+              action="View Assessment"
+              onNavigate={() => onNavigate?.("scoring")}
+            />
+          </div>
+
+          {/* AI Feedback */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-violet-500" />
+                <h3 className="text-xs font-bold text-slate-700">Was the AI assessment helpful?</h3>
+              </div>
+            </div>
+            <form onSubmit={handleFeedback} className="p-4 space-y-3">
+              <div className="flex gap-2">
+                {(["yes", "no"] as const).map(v => (
+                  <button key={v} type="button" onClick={() => setFeedbackHelpful(v)}
+                    className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${
+                      feedbackHelpful === v
+                        ? v === "yes" ? "border-teal-400 bg-teal-50 text-teal-700" : "border-rose-300 bg-rose-50 text-rose-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    }`}>
+                    {v === "yes" ? "Yes, helpful" : "Not helpful"}
+                  </button>
+                ))}
+              </div>
+              <textarea rows={2}
+                className="form-input resize-none text-xs"
+                placeholder="Optional comments…"
+                value={feedbackComment}
+                onChange={e => setFeedbackComment(e.target.value)}
+              />
+              <button type="submit" disabled={busy || feedbackHelpful === null}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-teal-400 hover:text-teal-700 hover:bg-teal-50 transition disabled:opacity-40">
+                Submit Feedback
+              </button>
+            </form>
           </div>
         </div>
 
-        {/* RIGHT COLUMN (7 Cols): Extracted Evidence, Audit Stream & Feedback Form */}
-        <div className="lg:col-span-7 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              2. EVIDENCE & AUDIT STREAM
-            </h2>
-            <span className="font-mono text-[10px] text-[#3DDC84]">TRACES & FEEDBACK</span>
-          </div>
+        {/* ── Right: Decision Form ─────────────────────────────────── */}
+        <div className="space-y-4">
+          {/* Confidence pill */}
+          {confidence && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">AI Confidence</p>
+              <p className="text-4xl font-black text-teal-600">{pct(confidence)}</p>
+              <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden mx-4">
+                <div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${confidence * 100}%` }} />
+              </div>
+            </div>
+          )}
 
-          <div className="relative flex-1 min-h-0">
-            <div
-              className="p-3.5 space-y-4 overflow-y-auto max-h-[calc(100vh-260px)]"
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(61,220,132,0.4) #22303A",
-              }}
-            >
-              {/* Extracted Evidence List */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
+              <UserCheck size={16} className="text-teal-600" />
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Final Reviewer Decision</h2>
+                <p className="text-xs text-slate-400">Recorded to audit log immediately.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleDecision} className="p-5 space-y-4">
+              {detail.ai_recommendation && (
+                <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                  <span className="text-xs text-slate-500 shrink-0">AI recommends:</span>
+                  <RecommendationBadge value={detail.ai_recommendation} />
+                </div>
+              )}
+
               <div className="space-y-2">
-                <div className="font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider">
-                  RECORDED EVIDENCE TRACES
-                </div>
-                <EvidenceList evidence={detail.evidence} />
+                {DECISION_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDecision(opt.value)}
+                    className={`w-full rounded-lg border px-4 py-3 text-sm font-bold text-left transition-all ${
+                      decision === opt.value ? opt.activeCls : opt.cls
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Historical Decision Audit Stream */}
-              <div className="space-y-2 pt-3 border-t border-[#22303A]">
-                <div className="font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider">
-                  HISTORICAL DECISION AUDIT LOG
+              {isOverride && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                    <AlertTriangle size={12} /> Your decision differs from the AI recommendation.
+                  </p>
+                  <textarea rows={2} required
+                    className="form-input resize-none text-sm"
+                    placeholder="Reason for your decision…"
+                    value={overrideReason}
+                    onChange={e => setOverrideReason(e.target.value)}
+                  />
                 </div>
+              )}
 
-                <div className="space-y-2 font-mono text-xs">
-                  {detail.audit_trail
-                    .filter((event) =>
-                      [
-                        "decision_submitted",
-                        "clarification_requested",
-                        "ai_overridden",
-                        "review_opened",
-                      ].includes(String(event.event_type || event.action))
-                    )
-                    .map((event, index) => (
-                      <div
-                        key={index}
-                        className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-2.5 space-y-1.5"
-                      >
-                        <div className="flex items-center justify-between font-bold text-[#E8EDF1]">
-                          <span className="uppercase text-[10px] text-[#3DDC84] flex items-center gap-1.5">
-                            <CheckCircle2 size={13} />{" "}
-                            {String(
-                              event.event_type || event.action
-                            ).replaceAll("_", " ")}
-                          </span>
-                          <span className="text-[10px] text-[#8B99A6] font-normal">
-                            {event.timestamp
-                              ? new Date(
-                                  String(event.timestamp)
-                                ).toLocaleTimeString()
-                              : `#${index + 1}`}
-                          </span>
-                        </div>
-                        <p className="text-[#8B99A6] text-[11px] break-all bg-[#131A21] p-2 rounded border border-[#22303A] font-mono leading-relaxed">
-                          {JSON.stringify(
-                            event.event_payload || event.details || {}
-                          )}
-                        </p>
-                      </div>
-                    ))}
-
-                  {!detail.audit_trail.length && (
-                    <div className="py-4 text-center text-[#8B99A6] text-[11px] border border-dashed border-[#22303A] rounded font-mono">
-                      NO DECISION AUDIT EVENTS RECORDED YET
-                    </div>
-                  )}
-                </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  <MessageSquare size={12} /> Reviewer Notes
+                </label>
+                <textarea
+                  rows={3}
+                  className="form-input resize-none"
+                  placeholder="Conditions, clarification requests, comments…"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
               </div>
 
-              {/* Feedback Form */}
-              <div className="pt-3 border-t border-[#22303A]">
-                <FeedbackForm onSubmit={onFeedback} busy={busy} />
+              <div className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2">
+                <CheckCircle2 size={13} className="text-teal-600 shrink-0" />
+                <p className="text-xs text-teal-700 font-semibold">Human reviewer has final authority.</p>
               </div>
-            </div>
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#131A21] to-transparent z-10" />
+
+              <button
+                type="submit"
+                disabled={busy}
+                className={`w-full rounded-xl px-5 py-3 text-sm font-black text-white transition-all shadow-sm disabled:opacity-50 ${
+                  decision === "APPROVE"  ? "bg-emerald-600 hover:bg-emerald-700" :
+                  decision === "REJECT"   ? "bg-rose-600 hover:bg-rose-700" :
+                                            "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                {busy ? "Submitting…" : "Submit Final Decision"}
+              </button>
+            </form>
           </div>
-        </div>
 
-        {/* BOTTOM FULL-WIDTH PANEL (12 Cols): Human Review Decision Cockpit */}
-        <div className="lg:col-span-12">
-          <DecisionPanel
-            recommendation={detail.ai_recommendation}
-            onSubmit={onDecision}
-            busy={busy}
-          />
+          <TechnicalDetails label="Technical reference">
+            <TechRow label="Application ID" value={detail.id} />
+            <TechRow label="Status (raw)"   value={detail.status} />
+            <TechRow label="Processing"     value={detail.processing_status} />
+            <TechRow label="Last updated"   value={detail.updated_at} />
+          </TechnicalDetails>
         </div>
       </div>
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+/* ── Sub-components ───────────────────────────────────────────────── */
+function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase">
-        {label}
-      </span>
-      <div className="font-mono text-xs font-semibold text-[#E8EDF1] truncate">
-        {value}
-      </div>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">{label}</p>
+      {children}
     </div>
-  );
-}
-
-function FeedbackForm({
-  onSubmit,
-  busy,
-}: {
-  onSubmit: (payload: Record<string, unknown>) => Promise<void>;
-  busy: boolean;
-}) {
-  const [feedbackType, setFeedbackType] = useState(
-    "AI_RECOMMENDATION_CORRECT"
-  );
-  const [comment, setComment] = useState("");
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    await onSubmit({
-      reviewer_id: "demo-reviewer",
-      feedback_type: feedbackType,
-      comment,
-      metadata: { source: "reviewer_workspace" },
-    });
-    setComment("");
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 space-y-2 font-mono text-xs pt-3 border-t border-[#22303A]"
-    >
-      <div className="flex items-center gap-1.5 font-bold text-[#E8EDF1] uppercase text-[11px]">
-        <MessageSquare size={13} className="text-[#3DDC84]" />
-        <span>MODEL EVALUATION FEEDBACK</span>
-      </div>
-
-      <label className="block space-y-1">
-        <span className="block text-[10px] font-bold text-[#8B99A6] uppercase">
-          FEEDBACK CATEGORY
-        </span>
-        <select
-          className="w-full rounded-[6px] border border-[#22303A] bg-[#131A21] px-2.5 py-1.5 text-xs text-[#E8EDF1] focus:outline-none focus:ring-1 focus:ring-[#3DDC84]"
-          value={feedbackType}
-          onChange={(e) => setFeedbackType(e.target.value)}
-        >
-          <option value="AI_RECOMMENDATION_CORRECT">AI REC CORRECT</option>
-          <option value="AI_RECOMMENDATION_INCORRECT">AI REC INCORRECT</option>
-          <option value="RULE_INCORRECT">RULE CONDITION INCORRECT</option>
-          <option value="MISSING_EVIDENCE">MISSING EVIDENCE TRACE</option>
-          <option value="EXTRACTION_ERROR">EXTRACTION ERROR</option>
-          <option value="SCORE_MISLEADING">RISK SCORE MISLEADING</option>
-        </select>
-      </label>
-
-      <label className="block space-y-1">
-        <span className="block text-[10px] font-bold text-[#8B99A6] uppercase">
-          REVIEWER OPERATIONAL NOTES
-        </span>
-        <textarea
-          rows={2}
-          className="w-full rounded-[6px] border border-[#22303A] bg-[#131A21] p-2 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84]"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Add operational model feedback..."
-        />
-      </label>
-
-      <div className="flex justify-end pt-1">
-        <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded border border-[#3DDC84] bg-[#3DDC84]/10 text-[#3DDC84] hover:bg-[#3DDC84] hover:text-[#0B0F14] focus:outline-none focus:ring-1 focus:ring-[#3DDC84] transition-colors"
-        >
-          <MessageSquare size={12} />
-          <span>RECORD FEEDBACK</span>
-        </button>
-      </div>
-    </form>
   );
 }

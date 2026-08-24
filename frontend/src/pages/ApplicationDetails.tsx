@@ -1,27 +1,40 @@
-// Structural Idea: A forensic split-view workspace pairing submitted document evidence locators on the left with extracted normalized fields on the right (inline critical-red contradiction highlights), with the human decision cockpit pinned to the viewport bottom.
-
+// ApplicationDetails.tsx — Case Overview.
+// Tabs: Overview | Documents | Validation | Evidence | Rules
+// Removed: Evaluation, Technical, Audit tabs.
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import {
-  AlertCircle,
-  AlertTriangle,
-  BookOpen,
-  BrainCircuit,
-  CheckCircle2,
-  FileSearch,
-  FileText,
-  History,
-  Layers,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  Terminal,
-  Trash2,
+  AlertTriangle, CheckCircle2, FileText, FolderOpen,
+  Trash2, XCircle, HelpCircle,
 } from "lucide-react";
-import { DecisionPanel } from "../components/DecisionPanel";
+import {
+  AlertBanner, EvidenceCard, FindingCard, PageHeader, RiskBadge,
+  RecommendationBadge, TechnicalDetails, TechRow, EmptyState,
+} from "../components/ui";
+import { StatusBadge } from "../components/StatusBadge";
 import type { ApplicationDetail } from "../types/api";
 
-type TabKey = "extracted" | "validation" | "rules" | "scoring" | "audit";
+/* ── Helpers ──────────────────────────────────────────────────────── */
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return iso; }
+}
+function fmtCurrency(v: unknown): string {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  return `₹${n.toLocaleString("en-IN")}`;
+}
+
+type Tab = "overview" | "documents" | "validation" | "evidence" | "rules";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "overview",   label: "Overview"   },
+  { key: "documents",  label: "Documents"  },
+  { key: "validation", label: "Validation" },
+  { key: "evidence",   label: "Evidence"   },
+  { key: "rules",      label: "Rules"      },
+];
 
 export function ApplicationDetails({
   detail,
@@ -31,516 +44,376 @@ export function ApplicationDetails({
   onDeleteApplication,
 }: {
   detail: ApplicationDetail | null;
-  onDecision: (payload: Record<string, unknown>) => Promise<void>;
+  onDecision: (p: Record<string, unknown>) => Promise<void>;
   busy: boolean;
-  onDeleteDocument?: (docId: string) => Promise<void>;
-  onDeleteApplication?: (appId: string) => Promise<void>;
+  onDeleteDocument: (id: string) => Promise<void>;
+  onDeleteApplication: (id: string) => Promise<void>;
 }) {
-  const [activeTab, setActiveTab] = useState<TabKey>("extracted");
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [contradictionExpanded, setContradictionExpanded] = useState(false);
+  const [tab, setTab] = useState<Tab>("overview");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!detail) {
     return (
-      <div className="rounded-[10px] border border-[#22303A] bg-[#131A21] p-8 text-center font-mono text-xs text-[#8B99A6]">
-        NO CASE SELECTED. SELECT AN APPLICATION FROM THE{" "}
-        <span className="text-[#3DDC84]">DASHBOARD</span> TO BEGIN INVESTIGATION.
-      </div>
+      <EmptyState
+        icon={<FolderOpen size={24} />}
+        title="No application selected"
+        description="Select an application from the Dashboard to view details."
+      />
     );
   }
 
-  const prediction = detail.predictions.at(-1);
+  const pred     = detail.predictions?.[detail.predictions.length - 1];
+  const formData = detail.form_data as Record<string, unknown> | undefined;
+  const fails    = detail.validation_results.filter(v => v.status === "FAIL");
+  const warns    = detail.validation_results.filter(v => v.status === "WARN" || v.status === "NOT_VERIFIABLE");
+  const passes   = detail.validation_results.filter(v => v.status === "PASS");
 
-  // Derive inline contradictions from validation and rule results
-  const contradictions = detail.validation_results.filter(
-    (v) => v.status === "FAIL" || v.status === "WARN" || v.message.toLowerCase().includes("mismatch")
-  );
+  const missingDocs = detail.documents.filter(d => {
+    const s = (d.processing_status ?? "").toUpperCase();
+    return s === "FAILED" || s === "ERROR";
+  });
+
+  const topFindings = [...fails, ...warns].slice(0, 5);
+
+  const meaningfulEvidence = detail.evidence.filter(e => {
+    const m = e.metadata_json as Record<string, unknown> | undefined;
+    return m?.evidence_text || m?.knowledge_base_document;
+  });
 
   return (
-    <div className="relative flex flex-col gap-3 font-sans text-[#E8EDF1] max-w-[1400px] mx-auto pb-4">
-      {/* Topographic Contour Background Layer */}
-      <div
-        className="pointer-events-none absolute -inset-4 z-0 overflow-hidden opacity-[0.08]"
-        aria-hidden="true"
-      >
-        <svg
-          className="h-full w-full"
-          xmlns="http://www.w3.org/2000/svg"
-          width="100%"
-          height="100%"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M 0,80 Q 300,40 600,110 T 1000,70 M 0,180 Q 250,220 550,160 T 1000,230 M 0,290 Q 400,340 750,280 T 1000,320"
-            fill="none"
-            stroke="#3DDC84"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M 0,130 Q 350,170 700,110 T 1000,190 M 0,240 Q 200,280 500,230 T 1000,280 M 0,360 Q 450,390 800,340 T 1000,410"
-            fill="none"
-            stroke="#22303A"
-            strokeWidth="2"
-          />
-        </svg>
+    <div className="max-w-[1100px] mx-auto space-y-5 animate-slide-up">
+      <PageHeader
+        title="Application Review"
+        subtitle={`${detail.project_title ?? "Untitled"} — ${detail.applicant_name ?? ""}`}
+        breadcrumb="Applications"
+        actions={<StatusBadge value={detail.status} />}
+      />
+
+      {/* ── Status row ────────────────────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        {[
+          { label: "Status",           content: <StatusBadge value={detail.status} /> },
+          { label: "AI Recommendation", content: <RecommendationBadge value={detail.ai_recommendation} /> },
+          { label: "Risk Level",        content: <RiskBadge value={pred?.prediction_class} /> },
+          { label: "Submitted",         content: <span className="text-sm text-slate-700">{fmtDate(detail.created_at)}</span> },
+        ].map(({ label, content }) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">{label}</p>
+            {content}
+          </div>
+        ))}
       </div>
 
-      {/* Viewport Top: Case Telemetry Header Strip */}
-      <div className="relative z-10 shrink-0 rounded-[10px] border border-[#22303A] bg-[#131A21] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#3DDC84] shrink-0">
-            <Terminal size={16} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono text-xs font-bold text-[#E8EDF1] truncate uppercase">
-                {detail.project_title ?? "APPLICATION INVESTIGATION"}
+      {/* ── Tabs ─────────────────────────────────────────────────── */}
+      <div className="flex gap-0 border-b border-slate-200">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              tab === t.key
+                ? "border-teal-600 text-teal-700"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {t.label}
+            {t.key === "validation" && (fails.length + warns.length) > 0 && (
+              <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                {fails.length + warns.length}
               </span>
-              <span className="font-mono text-[10px] text-[#8B99A6] border border-[#22303A] bg-[#0B0F14] px-2 py-0.5 rounded-[4px] uppercase shrink-0">
-                {detail.status.replaceAll("_", " ")}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 font-mono text-[11px] text-[#8B99A6] mt-0.5">
-              <span>APPLICANT: <strong className="text-[#E8EDF1]">{detail.applicant_name ?? "N/A"}</strong></span>
-              <span>•</span>
-              <span>CAT: <strong className="text-[#E8EDF1]">{detail.project_category ?? "UNASSIGNED"}</strong></span>
-              <span>•</span>
-              <span>REF: <strong className="text-[#3DDC84]">{detail.id.slice(0, 8)}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="font-mono text-xs border border-[#22303A] bg-[#0B0F14] px-3 py-1 rounded-[6px] flex items-center gap-2">
-            <span className="text-[#8B99A6] text-[10px]">AI REC:</span>
-            <span className="font-bold text-[#3DDC84] uppercase">
-              {detail.ai_recommendation?.replaceAll("_", " ") ?? "PENDING"}
-            </span>
-          </div>
-
-          {onDeleteApplication && (
-            <button
-              type="button"
-              onClick={() => onDeleteApplication(detail.id)}
-              className="flex h-7 items-center gap-1.5 rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-2.5 font-mono text-[11px] font-semibold text-[#8B99A6] hover:text-[#D9534F] hover:border-[#D9534F] transition-colors"
-              title="Delete case file"
-            >
-              <Trash2 size={12} />
-              <span className="hidden sm:inline">DELETE CASE</span>
-            </button>
-          )}
-        </div>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* DEGRADED MODE WARNING BANNER */}
-      {(Boolean(detail.workflow_state?.degraded_mode) ||
-        detail.documents.some((d) => d.metadata_json?.degraded_mode) ||
-        detail.audit_trail.some(
-          (evt) =>
-            String(evt.event_type ?? "").includes("degraded") ||
-            String((evt.event_payload as Record<string, unknown> | undefined)?.flag ?? "").includes("DEGRADED")
-        )) && (
-        <div className="relative z-10 shrink-0 rounded-[10px] border border-[#E0A93D] bg-[#E0A93D]/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#E0A93D]/40 bg-[#E0A93D]/20 text-[#E0A93D] shrink-0 mt-0.5">
-              <AlertTriangle size={18} />
+      {/* ══ OVERVIEW TAB ═════════════════════════════════════════ */}
+      {tab === "overview" && (
+        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+          {/* Left: Application Summary */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <FileText size={14} className="text-teal-600" />
+              <h2 className="text-sm font-bold text-slate-800">Application Summary</h2>
             </div>
-            <div className="min-w-0">
-              <div className="font-bold text-[#E0A93D] uppercase tracking-wider flex items-center gap-2">
-                <span>DEGRADED MODE: LLM UNAVAILABLE, USING REGEX-ONLY EXTRACTION</span>
-              </div>
-              <p className="text-[11px] text-[#E8EDF1]/80 mt-0.5 font-sans">
-                The LLM provider was unavailable during document parsing. Structured field extraction operated in regex fallback mode. Confidence metrics reflect system degradation rather than applicant defect.
-              </p>
-            </div>
-          </div>
-          <span className="shrink-0 font-mono text-[10px] font-bold text-[#E0A93D] border border-[#E0A93D]/40 bg-[#E0A93D]/20 px-2.5 py-1 rounded-[4px] uppercase">
-            SYSTEM DEGRADED
-          </span>
-        </div>
-      )}
-
-      {/* Viewport Center: Forensic Split View (Left Docs / Right Extracted Matrix) */}
-      {/* items-start prevents columns from stretching to each other's height */}
-      <div className="relative z-10 grid gap-3 lg:grid-cols-12 lg:items-start">
-        {/* LEFT PANEL (5 Cols): Submitted Documents & Evidence Locators */}
-        {/* sticky: stays in viewport as user scrolls through the right column */}
-        <aside className="lg:col-span-5 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden lg:sticky lg:top-3">
-          {/* Panel Header */}
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#E8EDF1] uppercase">
-              <FileSearch size={14} className="text-[#3DDC84]" />
-              <span>SUBMITTED DOCUMENTS ({detail.documents.length})</span>
-            </div>
-            <span className="font-mono text-[10px] text-[#8B99A6]">EVIDENCE LOCATORS</span>
-          </div>
-
-          {/* Documents Scroll Container */}
-          {/* max-height + scroll so left col never grows taller than viewport */}
-          <div className="p-3 space-y-2.5 overflow-y-auto max-h-[calc(100vh-180px)]">
-            {detail.documents.map((doc) => {
-              const isSelected = selectedDocId === doc.id;
-              return (
-                <div
-                  key={doc.id}
-                  onClick={() => setSelectedDocId(isSelected ? null : doc.id)}
-                  className={`cursor-pointer rounded-[6px] border p-3 font-mono text-xs transition-colors ${
-                    isSelected
-                      ? "border-[#3DDC84] bg-[#0B0F14]"
-                      : "border-[#22303A] bg-[#0B0F14]/70 hover:border-[#8B99A6]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0 font-semibold text-[#E8EDF1]">
-                      <FileText size={15} className="text-[#3DDC84] shrink-0" />
-                      <span className="truncate">{doc.filename}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[9px] font-bold text-[#3DDC84] border border-[#3DDC84]/30 bg-[#3DDC84]/10 px-1.5 py-0.5 rounded uppercase">
-                        {doc.document_type || "DOCUMENT"}
-                      </span>
-                      {onDeleteDocument && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteDocument(doc.id);
-                          }}
-                          className="flex h-5 w-5 items-center justify-center rounded border border-[#22303A] bg-[#0B0F14] text-[#8B99A6] hover:text-[#D9534F] hover:border-[#D9534F] transition-colors"
-                          title="Delete document"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-[#8B99A6] pt-2 border-t border-[#22303A]">
-                    <div>
-                      STATUS: <span className="text-[#E8EDF1] font-semibold">{doc.processing_status}</span>
-                    </div>
-                    <div>
-                      CHECKSUM: <span className="text-[#E8EDF1]">{doc.checksum ? doc.checksum.slice(0, 10) : "N/A"}</span>
-                    </div>
-                  </div>
-
-                  {/* Evidence Locator Pin */}
-                  <div className="mt-2 flex items-center justify-between text-[10px] bg-[#131A21] border border-[#22303A] p-1.5 rounded-[4px]">
-                    <span className="text-[#8B99A6]">LOCATOR PIN: #DOC-{doc.id.slice(0, 6)}</span>
-                    <span className="text-[#3DDC84] font-bold">MATCH: 98%</span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {!detail.documents.length && (
-              <div className="py-8 text-center font-mono text-xs text-[#8B99A6]">
-                NO ATTACHED DOCUMENTS FOUND
-              </div>
-            )}
-          </div>
-        </aside>
-
-        {/* RIGHT PANEL (7 Cols): Extracted / Normalized Fields & Audit Tabs */}
-        <main className="lg:col-span-7 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden min-w-0">
-          {/* Tab Navigation Header */}
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2 bg-[#0B0F14]/60 shrink-0 overflow-x-auto">
-            <div className="flex items-center gap-1 font-mono text-xs">
-              {[
-                { id: "extracted", label: "EXTRACTED FIELDS", icon: FileText },
-                { id: "validation", label: "VALIDATION", icon: CheckCircle2 },
-                { id: "rules", label: "RULES", icon: ShieldCheck },
-                { id: "scoring", label: "AI SCORING", icon: BrainCircuit },
-                { id: "audit", label: "AUDIT LOG", icon: History },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const active = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as TabKey)}
-                    className={`flex items-center gap-1.5 rounded-[6px] px-2.5 py-1.5 font-bold transition-colors focus:outline-none focus:ring-1 focus:ring-[#3DDC84] ${
-                      active
-                        ? "bg-[#131A21] text-[#3DDC84] border border-[#3DDC84]/50"
-                        : "text-[#8B99A6] border border-transparent hover:text-[#E8EDF1] hover:bg-[#131A21]/50"
-                    }`}
-                  >
-                    <Icon size={13} />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Contradiction Banner — collapsible, shrink-0. Collapsed by default so table is always visible. */}
-          {contradictions.length > 0 && (
-            <div className="mx-3 mt-3 shrink-0 rounded-[6px] border border-[#D9534F] bg-[#D9534F]/10 font-mono text-xs text-[#E8EDF1]">
-              {/* Clickable Header Row */}
-              <button
-                onClick={() => setContradictionExpanded((v) => !v)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left focus:outline-none"
-              >
-                <div className="flex items-center gap-2 font-bold text-[#D9534F] uppercase tracking-wider">
-                  <ShieldAlert size={14} />
-                  <span>INLINE CONTRADICTION DETECTED ({contradictions.length})</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] text-[#D9534F] border border-[#D9534F]/40 bg-[#D9534F]/20 px-2 py-0.5 rounded">
-                    {contradictionExpanded ? "HIDE" : "SHOW DETAILS"}
-                  </span>
-                  {contradictionExpanded ? <ChevronUp size={13} className="text-[#D9534F]" /> : <ChevronDown size={13} className="text-[#D9534F]" />}
-                </div>
-              </button>
-              {/* Expanded Detail List */}
-              {contradictionExpanded && (
-                <div className="px-3 pb-2.5 border-t border-[#D9534F]/30 pt-2 space-y-1">
-                  {contradictions.map((c, i) => (
-                    <div key={i} className="text-[11px] text-[#E8EDF1] flex items-start gap-1.5">
-                      <span className="text-[#D9534F] shrink-0 mt-0.5">•</span>
-                      <span><strong className="text-[#D9534F]">{c.validation_type}:</strong> {c.message}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tab Content Area. scroll-pt-3 prevents card tops clipping at panel border on scroll */}
-          <div className="p-3 scroll-pt-3">
-
-            {/* TAB 1: Extracted / Normalized Fields Matrix */}
-            {activeTab === "extracted" && (
-              <div className="space-y-3">
-                <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] overflow-hidden">
-                  <table className="w-full text-left font-sans text-xs">
-                    <thead className="border-b border-[#22303A] bg-[#131A21] font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider">
-                      <tr>
-                        <th className="py-2 px-3">Field Key</th>
-                        <th className="py-2 px-3">Extracted Value</th>
-                        <th className="py-2 px-3">Confidence</th>
-                        <th className="py-2 px-3 text-right">Audit Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#22303A] font-mono text-[11px]">
-                      {detail.form_data ? (
-                        Object.entries(detail.form_data).map(([key, val]) => {
-                          // Check if field is flagged in contradictions
-                          const isContradicted = contradictions.some((c) =>
-                            c.validation_type.toLowerCase().includes(key.toLowerCase()) ||
-                            c.message.toLowerCase().includes(key.toLowerCase())
-                          );
-
-                          return (
-                            <tr
-                              key={key}
-                              className={`transition-colors ${
-                                isContradicted
-                                  ? "bg-[#D9534F]/10 border-l-2 border-l-[#D9534F]"
-                                  : "hover:bg-[#131A21]/40"
-                              }`}
-                            >
-                              <td className="py-2 px-3 text-[#8B99A6] font-semibold uppercase">
-                                {key.replaceAll("_", " ")}
-                              </td>
-                              <td className="py-2 px-3 text-[#E8EDF1]">
-                                {String(val)}
-                              </td>
-                              <td className="py-2 px-3 text-[#3DDC84]">
-                                {isContradicted ? (
-                                  <span className="text-[#D9534F] font-bold">62% (MISMATCH)</span>
-                                ) : (
-                                  "98%"
-                                )}
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                {isContradicted ? (
-                                  <span className="inline-block font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#D9534F] text-[#0B0F14] uppercase">
-                                    CONTRADICTION
-                                  </span>
-                                ) : (
-                                  <span className="inline-block font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#3DDC84]/40 bg-[#3DDC84]/10 text-[#3DDC84] uppercase">
-                                    VERIFIED
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="py-6 text-center text-[#8B99A6]">
-                            NO EXTRACTED FIELDS AVAILABLE
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: Validation Checks */}
-            {activeTab === "validation" && (
-              <div className="space-y-2 font-mono text-xs">
-                {detail.validation_results.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`rounded-[6px] border p-2.5 flex items-start justify-between gap-3 ${
-                      item.status === "PASS"
-                        ? "border-[#3DDC84]/30 bg-[#3DDC84]/5 text-[#E8EDF1]"
-                        : item.status === "WARN"
-                        ? "border-[#E0A93D]/30 bg-[#E0A93D]/5 text-[#E8EDF1]"
-                        : "border-[#D9534F]/40 bg-[#D9534F]/10 text-[#E8EDF1]"
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold uppercase text-[#E8EDF1]">
-                        {item.validation_type.replaceAll("_", " ")}
-                      </div>
-                      <div className="text-[11px] text-[#8B99A6] mt-0.5">
-                        {item.message}
-                      </div>
-                    </div>
-                    <span
-                      className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase ${
-                        item.status === "PASS"
-                          ? "bg-[#3DDC84] text-[#0B0F14]"
-                          : item.status === "WARN"
-                          ? "bg-[#E0A93D] text-[#0B0F14]"
-                          : "bg-[#D9534F] text-[#0B0F14]"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
+            <div className="p-5">
+              <div className="grid gap-0 sm:grid-cols-2">
+                {[
+                  ["Applicant",    detail.applicant_name],
+                  ["Organisation", formData?.organization_name as string],
+                  ["Scheme",       detail.scheme_id],
+                  ["Project",      detail.project_title],
+                  ["Category",     detail.project_category],
+                  ["Location",     formData?.project_location as string],
+                  ["Cost",         fmtCurrency(formData?.project_cost)],
+                  ["Duration",     formData?.project_duration ? `${formData.project_duration} months` : null],
+                ].map(([l, v]) => (
+                  <div key={l} className="flex items-baseline gap-2 py-2 border-b border-slate-50 last:border-0">
+                    <span className="text-xs font-semibold text-slate-400 w-24 shrink-0">{l}</span>
+                    <span className="text-sm text-slate-800">{v ?? "—"}</span>
                   </div>
                 ))}
               </div>
-            )}
 
-            {/* TAB 3: Rules Evaluation Matrix */}
-            {activeTab === "rules" && (
-              <div className="space-y-2 font-mono text-xs">
-                {detail.rule_results.map((rule, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-2.5 flex items-start justify-between gap-3"
-                  >
-                    <div>
-                      <div className="font-bold text-[#E8EDF1] uppercase">
-                        RULE: {rule.rule_id}
-                      </div>
-                      <div className="text-[11px] text-[#8B99A6] mt-0.5">
-                        {rule.reason}
-                      </div>
-                    </div>
-                    <span
-                      className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase ${
-                        rule.result === "PASS"
-                          ? "bg-[#3DDC84] text-[#0B0F14]"
-                          : "bg-[#D9534F] text-[#0B0F14]"
-                      }`}
-                    >
-                      {rule.result}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* TAB 4: AI Scoring */}
-            {activeTab === "scoring" && (
-              <div className="space-y-3 font-mono text-xs">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3">
-                    <div className="text-[10px] text-[#8B99A6] uppercase">Quality Score</div>
-                    <div className="text-xl font-bold text-[#3DDC84] mt-1">
-                      {prediction?.quality_score != null ? prediction.quality_score.toFixed(2) : "N/A"}
-                    </div>
-                  </div>
-                  <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3">
-                    <div className="text-[10px] text-[#8B99A6] uppercase">Risk Score</div>
-                    <div className="text-xl font-bold text-[#D9534F] mt-1">
-                      {prediction?.risk_score != null ? prediction.risk_score.toFixed(2) : "N/A"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 5: Audit Log */}
-            {activeTab === "audit" && (
-              <div className="space-y-2 font-mono text-xs">
-                {detail.audit_trail && detail.audit_trail.length > 0 ? (
-                  detail.audit_trail.map((evt, idx) => {
-                    const eventType = String(evt.event_type ?? evt.action ?? "UNKNOWN_EVENT");
-                    const actorId   = String(evt.actor_id  ?? evt.actor  ?? "system");
-                    const payload   = (evt.event_payload ?? evt.payload) as Record<string, unknown> | undefined;
-                    const createdAt = evt.created_at ?? evt.timestamp;
-                    const payloadEntries = payload && typeof payload === "object"
-                      ? Object.entries(payload).slice(0, 5)
-                      : [];
-
-                    return (
-                      <div
-                        key={idx}
-                        className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 text-[11px]"
-                      >
-                        {/* Top row: event label + timestamp */}
-                        <div className="flex items-start justify-between gap-3 mb-1.5">
-                          <span className="font-bold text-[#3DDC84] uppercase tracking-wide">
-                            {eventType.replaceAll("_", " ")}
-                          </span>
-                          <span className="text-[9px] text-[#8B99A6] shrink-0 tabular-nums">
-                            {createdAt
-                              ? new Date(String(createdAt)).toLocaleString("en-IN", {
-                                  day: "2-digit", month: "short", year: "numeric",
-                                  hour: "2-digit", minute: "2-digit", second: "2-digit",
-                                })
-                              : `#${idx + 1}`}
-                          </span>
-                        </div>
-                        {/* Actor */}
-                        <div className="text-[10px] text-[#8B99A6]">
-                          ACTOR:{" "}
-                          <span className="text-[#E8EDF1] font-semibold">{actorId}</span>
-                        </div>
-                        {/* Payload key-value pairs */}
-                        {payloadEntries.length > 0 && (
-                          <div className="mt-2 border-t border-[#22303A]/60 pt-2 space-y-1">
-                            {payloadEntries.map(([k, v]) => (
-                              <div key={k} className="flex items-start gap-2 text-[10px]">
-                                <span className="text-[#8B99A6] shrink-0 uppercase">
-                                  {k.replaceAll("_", " ")}:
-                                </span>
-                                <span className="text-[#E8EDF1] break-all">{String(v)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+              {/* Documents submitted */}
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Submitted Documents</p>
+                {detail.documents.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">No documents submitted.</p>
                 ) : (
-                  <div className="py-8 text-center text-[#8B99A6]">
-                    NO AUDIT EVENTS RECORDED YET
+                  <div className="space-y-1.5">
+                    {detail.documents.map(doc => {
+                      const s = (doc.processing_status ?? "").toUpperCase();
+                      const isOk = s === "PROCESSED" || doc.extraction_status?.toUpperCase() === "EXTRACTED";
+                      return (
+                        <div key={doc.id} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            {isOk ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0" /> :
+                                    <AlertTriangle size={13} className="text-amber-500 shrink-0" />}
+                            <span className="text-slate-700 truncate max-w-[220px]">{doc.filename}</span>
+                          </div>
+                          <button
+                            onClick={() => onDeleteDocument(doc.id)}
+                            className="text-slate-300 hover:text-rose-500 transition shrink-0"
+                            title="Remove document"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Right: Decision Summary */}
+          <div className="space-y-4">
+            {/* Key issues */}
+            {topFindings.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-500" />
+                  <h3 className="text-sm font-bold text-slate-800">Why This Needs Attention</h3>
+                </div>
+                <div className="p-4 space-y-2">
+                  {topFindings.map((f, i) => (
+                    <FindingCard
+                      key={i}
+                      status={f.status}
+                      title={f.validation_type.replaceAll("_", " ")}
+                      message={f.message}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Missing docs */}
+            {missingDocs.length > 0 && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-1.5">
+                <p className="text-xs font-bold text-rose-500 uppercase tracking-wide mb-2">Missing / Failed Documents</p>
+                {missingDocs.map(d => (
+                  <div key={d.id} className="flex items-center gap-2 text-sm text-rose-700">
+                    <XCircle size={13} />
+                    <span>{d.filename}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Validation counts */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Validation Summary</p>
+              <div className="space-y-2">
+                {[
+                  { n: passes.length, label: "Passed",   icon: <CheckCircle2 size={14} className="text-emerald-500" />, color: "text-emerald-700" },
+                  { n: warns.length,  label: "Need Verification", icon: <AlertTriangle size={14} className="text-amber-500" />, color: "text-amber-700" },
+                  { n: fails.length,  label: "Failed",   icon: <XCircle size={14} className="text-rose-500" />, color: "text-rose-700" },
+                ].map(({ n, label, icon, color }) => (
+                  <div key={label} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">{icon}<span className="text-slate-600">{label}</span></div>
+                    <span className={`font-bold ${color}`}>{n}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Danger zone */}
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full text-xs text-slate-400 hover:text-rose-500 transition text-center py-2"
+              >
+                Delete this application
+              </button>
+            ) : (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-rose-700">Delete this application permanently?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => { onDeleteApplication(detail.id); setConfirmDelete(false); }} disabled={busy}
+                    className="flex-1 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700 transition">
+                    Delete
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)}
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-        </main>
-      </div>
+        </div>
+      )}
 
-      {/* Decision Cockpit — flows naturally after content */}
-      <div className="relative z-10">
-        <DecisionPanel
-          recommendation={detail.ai_recommendation}
-          onSubmit={onDecision}
-          busy={busy}
-        />
-      </div>
+      {/* ══ DOCUMENTS TAB ════════════════════════════════════════ */}
+      {tab === "documents" && (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-800">Documents</h2>
+          </div>
+          {detail.documents.length === 0 ? (
+            <p className="p-8 text-center text-sm text-slate-400">No documents submitted.</p>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {detail.documents.map(doc => {
+                const ps = (doc.processing_status ?? "").toUpperCase();
+                const isOk   = ps === "PROCESSED" || doc.extraction_status?.toUpperCase() === "EXTRACTED";
+                const isFail = ps === "FAILED" || ps === "ERROR";
+                return (
+                  <div key={doc.id} className="flex items-center gap-4 px-5 py-3.5">
+                    {isOk ? <CheckCircle2 size={16} className="text-emerald-500 shrink-0" /> :
+                     isFail ? <XCircle size={16} className="text-rose-500 shrink-0" /> :
+                              <HelpCircle size={16} className="text-amber-500 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{doc.filename}</p>
+                      <p className="text-xs text-slate-400">{doc.document_type || "Document"} • {fmtDate(doc.uploaded_at)}</p>
+                    </div>
+                    <span className={`text-xs font-semibold shrink-0 ${isOk ? "text-emerald-600" : isFail ? "text-rose-600" : "text-amber-600"}`}>
+                      {isOk ? "Ready" : isFail ? "Failed" : "Pending"}
+                    </span>
+                    <TechnicalDetails label="">
+                      <TechRow label="Status"     value={doc.processing_status} />
+                      <TechRow label="Extraction" value={doc.extraction_status} />
+                      <TechRow label="OCR"        value={doc.ocr_status ?? "—"} />
+                    </TechnicalDetails>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ VALIDATION TAB ═══════════════════════════════════════ */}
+      {tab === "validation" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-4">
+            {[
+              { n: passes.length, label: "Passed",  cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+              { n: warns.length,  label: "Verify",  cls: "border-amber-200 bg-amber-50 text-amber-700" },
+              { n: fails.length,  label: "Failed",  cls: "border-rose-200 bg-rose-50 text-rose-700" },
+            ].map(({ n, label, cls }) => (
+              <div key={label} className={`rounded-lg border px-4 py-2 text-sm font-bold ${cls}`}>
+                {n} {label}
+              </div>
+            ))}
+          </div>
+
+          {topFindings.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Important Findings</p>
+              {topFindings.map((f, i) => <FindingCard key={i} status={f.status} title={f.validation_type.replaceAll("_", " ")} message={f.message} />)}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+              <p className="text-xs font-bold text-slate-700">All Checks</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                    {["Check", "Result", "Detail"].map(h => (
+                      <th key={h} className={`text-left px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wide ${h === "Detail" ? "hidden md:table-cell" : ""}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {[...fails, ...warns, ...passes].map((v, i) => (
+                    <tr key={i} className="hover:bg-slate-50 transition">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{v.validation_type.replaceAll("_", " ")}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          v.status === "PASS"           ? "bg-emerald-100 text-emerald-700" :
+                          v.status === "FAIL"           ? "bg-rose-100 text-rose-700" :
+                          v.status.includes("NOT")      ? "bg-amber-100 text-amber-700" :
+                          v.status === "WARN"           ? "bg-amber-100 text-amber-700" :
+                                                          "bg-slate-100 text-slate-500"
+                        }`}>
+                          {v.status === "PASS" ? "✓ " : v.status === "FAIL" ? "✕ " : "⚠ "}
+                          {v.status.replaceAll("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs hidden md:table-cell max-w-xs truncate">{v.message || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ EVIDENCE TAB ═════════════════════════════════════════ */}
+      {tab === "evidence" && (
+        <div className="space-y-4">
+          {meaningfulEvidence.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+              <p className="text-sm text-slate-400">Evidence could not be retrieved for this application.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {meaningfulEvidence.map(ev => <EvidenceCard key={ev.id} item={ev} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ RULES TAB ════════════════════════════════════════════ */}
+      {tab === "rules" && (
+        <div className="space-y-3">
+          {detail.rule_results.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+              <p className="text-sm text-slate-400">No scheme rules have been evaluated yet.</p>
+            </div>
+          ) : (
+            detail.rule_results.map(r => {
+              const pass = r.result?.toUpperCase() === "PASS";
+              return (
+                <div key={r.id} className={`rounded-xl border shadow-sm p-4 ${pass ? "border-emerald-200 bg-emerald-50/30" : "border-rose-200 bg-rose-50/30"}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{r.rule_name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{r.reason}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${pass ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      {pass ? "✓ Pass" : "✕ Fail"}
+                    </span>
+                  </div>
+                  <TechnicalDetails label="Rule details">
+                    <TechRow label="Rule ID"  value={r.rule_id} />
+                    <TechRow label="Severity" value={r.severity} />
+                    <TechRow label="Expected" value={JSON.stringify(r.expected_value)} />
+                    <TechRow label="Actual"   value={JSON.stringify(r.actual_value)} />
+                  </TechnicalDetails>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,410 +1,350 @@
-// Structural Idea: A forensic case intake console framed as opening an official audit ledger file, pairing structured metadata entry on the left with document package verification vault on the right.
-
-import {
-  CheckCircle2,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  FolderPlus,
-  PlusCircle,
-  RotateCcw,
-  ShieldCheck,
-  Terminal,
-  Upload,
-  X,
-} from "lucide-react";
+// NewApplication.tsx — 3-step guided application form with free navigation.
+// Steps: 1. Details | 2. Documents | 3. Review & Submit
+// Data is preserved when navigating between steps.
+import { useState, useRef } from "react";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import {
+  CheckCircle2, ChevronRight, FileText, Loader2, Upload, X,
+} from "lucide-react";
+import { AlertBanner, PageHeader } from "../components/ui";
 import type { SchemeRead } from "../types/api";
+
+type Step = 1 | 2 | 3;
+
+const STEPS = [
+  { n: 1 as Step, label: "Application Details" },
+  { n: 2 as Step, label: "Documents" },
+  { n: 3 as Step, label: "Review & Submit" },
+];
+
+/* ── Accepted document types ──────────────────────────────────────── */
+const REQUIRED_DOC_TYPES = [
+  "Application Form",
+  "Project Budget",
+  "Organisation Certificate",
+  "Technical Proposal",
+];
 
 export function NewApplication({
   schemes,
   onCreate,
 }: {
   schemes: SchemeRead[];
-  onCreate: (
-    payload: Record<string, unknown>,
-    files: FileList | null
-  ) => Promise<void>;
+  onCreate: (payload: Record<string, unknown>, files: FileList | null) => Promise<void>;
 }) {
+  const [step, setStep] = useState<Step>(1);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({
-    applicant_name: "",
-    organization_type: "",
-    project_title: "",
-    project_category: "",
-    project_cost: "",
-    duration_months: "",
-    environmental_benefit: "",
-  });
-  const [schemeId, setSchemeId] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  function addFiles(picked: FileList | null) {
-    if (!picked) return;
-    const incoming = Array.from(picked);
-    setFiles((prev) => {
-      const existingNames = new Set(prev.map((f) => f.name));
-      const fresh = incoming.filter((f) => !existingNames.has(f.name));
-      return [...prev, ...fresh];
+  // Form state
+  const [schemeId,    setSchemeId]    = useState(schemes[0]?.id ?? "");
+  const [applicant,   setApplicant]   = useState("");
+  const [orgName,     setOrgName]     = useState("");
+  const [projTitle,   setProjTitle]   = useState("");
+  const [projCat,     setProjCat]     = useState("");
+  const [location,    setLocation]    = useState("");
+  const [cost,        setCost]        = useState("");
+  const [duration,    setDuration]    = useState("");
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function removeFile(i: number) {
+    setFiles(prev => prev.filter((_, idx) => idx !== i));
+  }
+
+  function addFiles(incoming: FileList | null) {
+    if (!incoming) return;
+    setFiles(prev => {
+      const names = new Set(prev.map(f => f.name));
+      return [...prev, ...Array.from(incoming).filter(f => !names.has(f.name))];
     });
   }
 
-  function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function fileIcon(name: string) {
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext))
-      return <FileImage size={15} className="text-[#3DDC84] shrink-0" />;
-    if (["xlsx", "xls", "csv"].includes(ext))
-      return <FileSpreadsheet size={15} className="text-[#3DDC84] shrink-0" />;
-    return <FileText size={15} className="text-[#3DDC84] shrink-0" />;
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
     setBusy(true);
     try {
-      const formData: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(form)) {
-        if (!value.trim()) continue;
-        formData[key] = value.trim();
-      }
-      if (form.project_cost.trim()) {
-        formData.project_cost = Number(form.project_cost);
-      }
-      if (form.duration_months.trim()) {
-        formData.duration_months = Number(form.duration_months);
-      }
-      // Convert File[] back to a DataTransfer-backed FileList for the API handler
+      // Build FileList-compatible object
       const dt = new DataTransfer();
-      files.forEach((f) => dt.items.add(f));
-      await onCreate(
-        {
-          scheme_id: schemeId || undefined,
-          applicant_name: form.applicant_name.trim() || undefined,
-          project_title: form.project_title.trim() || undefined,
-          project_category: form.project_category.trim() || undefined,
-          form_data: formData,
+      files.forEach(f => dt.items.add(f));
+      await onCreate({
+        scheme_id: schemeId || null,
+        applicant_name: applicant.trim(),
+        form_data: {
+          organization_name: orgName.trim(),
+          project_location: location.trim(),
+          project_cost: cost ? Number(cost) : null,
+          project_duration: duration ? Number(duration) : null,
+          description: description.trim(),
         },
-        dt.files.length ? dt.files : null
-      );
+        project_title: projTitle.trim(),
+        project_category: projCat.trim(),
+      }, dt.files.length > 0 ? dt.files : null);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  function update(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
+  if (submitted) {
+    return (
+      <div className="max-w-[600px] mx-auto mt-16 text-center space-y-4">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <CheckCircle2 size={32} className="text-emerald-600" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Application Submitted</h2>
+        <p className="text-sm text-slate-500">Your application has been submitted and processing will begin shortly.</p>
+      </div>
+    );
   }
 
-  const fileListArray = files;
-
   return (
-    <div className="relative flex flex-col gap-3 font-sans text-[#E8EDF1] max-w-[1400px] mx-auto pb-4">
-      {/* Topographic Contour Background Layer Signature Motif */}
-      <div
-        className="pointer-events-none absolute -inset-4 z-0 overflow-hidden opacity-[0.08]"
-        aria-hidden="true"
-      >
-        <svg
-          className="h-full w-full"
-          xmlns="http://www.w3.org/2000/svg"
-          width="100%"
-          height="100%"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M 0,90 Q 250,50 500,120 T 1000,80 M 0,200 Q 300,160 600,230 T 1000,180 M 0,310 Q 200,280 500,340 T 1000,300"
-            fill="none"
-            stroke="#3DDC84"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M 0,140 Q 350,180 700,120 T 1000,200 M 0,250 Q 200,290 500,240 T 1000,290 M 0,380 Q 450,410 800,360 T 1000,430"
-            fill="none"
-            stroke="#22303A"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
+    <div className="max-w-[800px] mx-auto space-y-6">
+      <PageHeader
+        title="New Application"
+        subtitle="Complete all steps to submit your application for review."
+        breadcrumb="Workspace"
+      />
 
-      {/* Intake Console Header Strip */}
-      <div className="relative z-10 shrink-0 rounded-[10px] border border-[#22303A] bg-[#131A21] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#3DDC84]">
-            <Terminal size={18} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-mono text-sm font-bold tracking-wider text-[#E8EDF1] uppercase">
-                NEW CASE FILE INTAKE CONSOLE
-              </h1>
-              <span className="font-mono text-[10px] font-semibold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-2 py-0.5 rounded-[4px]">
-                INTAKE DRAFT READY
+      {/* ── Step Indicator ────────────────────────────────────────── */}
+      <div className="flex items-center gap-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {STEPS.map((s, i) => {
+          const done   = s.n < step;
+          const active = s.n === step;
+          return (
+            <button
+              key={s.n}
+              type="button"
+              onClick={() => setStep(s.n)}
+              className={`flex-1 flex items-center gap-2 justify-center px-4 py-3.5 text-sm font-semibold transition-colors border-r last:border-0 border-slate-100 ${
+                active ? "bg-teal-600 text-white" :
+                done   ? "bg-teal-50 text-teal-700 hover:bg-teal-100" :
+                         "text-slate-400 hover:bg-slate-50"
+              }`}
+            >
+              <span className={`h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${
+                done   ? "bg-teal-600 text-white" :
+                active ? "bg-white text-teal-600" :
+                         "bg-slate-200 text-slate-500"
+              }`}>
+                {done ? <CheckCircle2 size={12} /> : s.n}
               </span>
-            </div>
-            <p className="text-xs text-[#8B99A6] mt-0.5">
-              Environmental Application Review & Decision Support • Register metadata & ingest document package
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 font-mono text-xs text-[#8B99A6] bg-[#0B0F14] border border-[#22303A] px-3 py-1.5 rounded-[6px]">
-          <FolderPlus size={14} className="text-[#3DDC84]" />
-          <span>DRAFT REF: DECC-2026-TEMP</span>
-        </div>
+              <span className="hidden sm:inline">{s.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Main Intake Split View (Left: Form Metadata / Right: Document Package Ingestion Vault) */}
-      <form onSubmit={submit} className="relative z-10 grid gap-3 lg:grid-cols-12 lg:items-start">
-        {/* LEFT PANEL (7 Cols): Case Metadata Entry Form */}
-        <div className="lg:col-span-7 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-4 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              1. STRUCTURED METADATA ENTRY
-            </h2>
-            <span className="font-mono text-[10px] text-[#8B99A6]">FIELD MATRIX</span>
-          </div>
+      {error && <AlertBanner variant="error" onDismiss={() => setError(null)}>{error}</AlertBanner>}
 
-          <div className="flex-1 p-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {/* Scheme Dropdown */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Environmental Scheme *
-                </span>
+      <form onSubmit={handleSubmit}>
+        {/* ── Step 1: Application Details ─────────────────────────── */}
+        {step === 1 && (
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-sm font-bold text-slate-800">Application Details</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Provide the key information about this application.</p>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Scheme */}
+              <FormField label="Scheme" required>
                 <select
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-mono text-xs text-[#E8EDF1] focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
+                  className="form-select"
                   value={schemeId}
-                  onChange={(e) => setSchemeId(e.target.value)}
+                  onChange={e => setSchemeId(e.target.value)}
+                  required
                 >
-                  <option value="">SELECT SCHEME REGISTRY</option>
-                  {schemes.map((scheme) => (
-                    <option key={scheme.id} value={scheme.id}>
-                      {scheme.name}
-                    </option>
+                  <option value="">Select a scheme…</option>
+                  {schemes.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
-              </label>
+              </FormField>
 
-              {/* Applicant Name */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Applicant Entity Name *
-                </span>
-                <input
-                  required
-                  placeholder="e.g. TCS Green Infrastructure Ltd"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-sans text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.applicant_name}
-                  onChange={(e) => update("applicant_name", e.target.value)}
-                />
-              </label>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FormField label="Applicant Name" required>
+                  <input className="form-input" placeholder="Full name of applicant"
+                    value={applicant} onChange={e => setApplicant(e.target.value)} required />
+                </FormField>
+                <FormField label="Organisation">
+                  <input className="form-input" placeholder="Organisation name"
+                    value={orgName} onChange={e => setOrgName(e.target.value)} />
+                </FormField>
+              </div>
 
-              {/* Organization Type */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Organization Type
-                </span>
-                <input
-                  placeholder="e.g. Private Limited / PSU / NGO"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-sans text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.organization_type}
-                  onChange={(e) => update("organization_type", e.target.value)}
-                />
-              </label>
+              <FormField label="Project Title" required>
+                <input className="form-input" placeholder="Descriptive title for the project"
+                  value={projTitle} onChange={e => setProjTitle(e.target.value)} required />
+              </FormField>
 
-              {/* Project Category */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Project Category
-                </span>
-                <input
-                  placeholder="e.g. Solar Energy / Wastewater / Forestry"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-sans text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.project_category}
-                  onChange={(e) => update("project_category", e.target.value)}
-                />
-              </label>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FormField label="Project Category">
+                  <input className="form-input" placeholder="e.g. Water Conservation"
+                    value={projCat} onChange={e => setProjCat(e.target.value)} />
+                </FormField>
+                <FormField label="Project Location">
+                  <input className="form-input" placeholder="City / district"
+                    value={location} onChange={e => setLocation(e.target.value)} />
+                </FormField>
+              </div>
 
-              {/* Project Title (Full Width) */}
-              <label className="block sm:col-span-2">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Project Title *
-                </span>
-                <input
-                  required
-                  placeholder="e.g. 50MW Solar Park & Bio-clearance Phase 1"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-sans text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.project_title}
-                  onChange={(e) => update("project_title", e.target.value)}
-                />
-              </label>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FormField label="Project Cost (₹)">
+                  <input className="form-input" type="number" min={0} placeholder="e.g. 5000000"
+                    value={cost} onChange={e => setCost(e.target.value)} />
+                </FormField>
+                <FormField label="Project Duration (months)">
+                  <input className="form-input" type="number" min={1} placeholder="e.g. 24"
+                    value={duration} onChange={e => setDuration(e.target.value)} />
+                </FormField>
+              </div>
 
-              {/* Project Cost */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Project Cost (INR)
-                </span>
-                <input
-                  type="number"
-                  placeholder="e.g. 12500000"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-mono text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.project_cost}
-                  onChange={(e) => update("project_cost", e.target.value)}
-                />
-              </label>
-
-              {/* Duration Months */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Duration (Months)
-                </span>
-                <input
-                  type="number"
-                  placeholder="e.g. 24"
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-mono text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.duration_months}
-                  onChange={(e) => update("duration_months", e.target.value)}
-                />
-              </label>
-
-              {/* Environmental Benefit Summary */}
-              <label className="block sm:col-span-2">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  Environmental Benefit & Technical Proposal Summary
-                </span>
-                <textarea
-                  rows={3}
-                  placeholder="Provide technical overview of environmental impact reduction..."
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-2.5 font-sans text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={form.environmental_benefit}
-                  onChange={(e) => update("environmental_benefit", e.target.value)}
-                />
-              </label>
+              <FormField label="Project Description">
+                <textarea className="form-input resize-none" rows={3}
+                  placeholder="Brief description of the project and its objectives"
+                  value={description} onChange={e => setDescription(e.target.value)} />
+              </FormField>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button type="button" onClick={() => setStep(2)}
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700 transition">
+                Next: Documents <ChevronRight size={15} />
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* RIGHT PANEL (5 Cols): Document Package Ingestion Vault */}
-        <div className="lg:col-span-5 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-4 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              2. DOCUMENT INGESTION VAULT
-            </h2>
-            <span className="font-mono text-[10px] text-[#3DDC84]">
-              {files.length} ATTACHED
-            </span>
-          </div>
-
-          <div className="flex-1 p-4 space-y-4">
-            {/* File Drop Surface (Dark #0B0F14, crisp 1px border #22303A) */}
-            <label className="group flex flex-col items-center justify-center rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-5 text-center cursor-pointer transition-colors hover:border-[#3DDC84]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#22303A] bg-[#131A21] text-[#3DDC84] group-hover:border-[#3DDC84]">
-                <Upload size={18} />
-              </div>
-              <div className="mt-2 font-mono text-xs font-bold text-[#E8EDF1]">
-                ATTACH APPLICATION PACKAGE
-              </div>
-              <div className="text-[10px] font-mono text-[#8B99A6] mt-0.5">
-                PDF, DOCX, XLSX, CSV, JPG, PNG (UP TO 25MB PER FILE)
-              </div>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.gif,.webp"
-                className="sr-only"
-                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
-              />
-            </label>
-
-            {/* Attached File Queue List */}
-            <div className="space-y-2">
-              <div className="font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider">
-                INGESTION QUEUE VERIFICATION
-              </div>
-
-              {fileListArray.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-2.5 font-mono text-xs group"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {fileIcon(file.name)}
-                    <div className="min-w-0">
-                      <span className="block truncate text-[#E8EDF1]">{file.name}</span>
-                      <span className="text-[9px] text-[#8B99A6]">
-                        {file.name.split(".").pop()?.toUpperCase()} • {(file.size / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] text-[#3DDC84] font-bold">READY</span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(idx)}
-                      className="flex h-5 w-5 items-center justify-center rounded-[4px] border border-[#22303A] text-[#8B99A6] hover:border-[#D9534F] hover:text-[#D9534F] transition-colors"
-                      title="Remove file"
-                    >
-                      <X size={11} />
-                    </button>
-                  </div>
+        {/* ── Step 2: Documents ────────────────────────────────────── */}
+        {step === 2 && (
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-sm font-bold text-slate-800">Documents</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Upload all supporting documents. You can add more later.</p>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Required types reference */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Typically required</p>
+                <div className="flex flex-wrap gap-2">
+                  {REQUIRED_DOC_TYPES.map(t => (
+                    <span key={t} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+                      <FileText size={11} /> {t}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              </div>
 
-              {!fileListArray.length && (
-                <div className="py-6 text-center font-mono text-xs text-[#8B99A6] border border-dashed border-[#22303A] rounded-[6px]">
-                  NO DOCUMENTS ATTACHED YET
+              {/* Upload zone */}
+              <div
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 py-10 hover:border-teal-400 hover:bg-teal-50 transition cursor-pointer"
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+              >
+                <Upload size={24} className="text-slate-400 mb-2" />
+                <p className="text-sm font-semibold text-slate-600">Drop files here or click to upload</p>
+                <p className="text-xs text-slate-400 mt-1">PDF, DOCX, XLSX, JPEG, PNG supported</p>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xlsx,.xls,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={e => addFiles(e.target.files)}
+                />
+              </div>
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{files.length} file(s) ready to upload</p>
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText size={14} className="text-teal-600 shrink-0" />
+                        <span className="text-sm text-slate-700 truncate">{f.name}</span>
+                        <span className="text-xs text-slate-400 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                      <button type="button" onClick={() => removeFile(i)} className="text-slate-300 hover:text-rose-500 transition">
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Form Action Footer */}
-          <div className="p-3 border-t border-[#22303A] bg-[#0B0F14]/60 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 font-mono text-[10px] text-[#8B99A6]">
-              <ShieldCheck size={14} className="text-[#3DDC84]" />
-              <span>CHECKSUM VERIFICATION ACTIVE</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setForm({
-                    applicant_name: "",
-                    organization_type: "",
-                    project_title: "",
-                    project_category: "",
-                    project_cost: "",
-                    duration_months: "",
-                    environmental_benefit: "",
-                  });
-                  setSchemeId("");
-                  setFiles([]);
-                }}
-                className="inline-flex items-center gap-1.5 font-mono text-xs font-bold uppercase tracking-wider px-3.5 py-2 rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#8B99A6] hover:text-[#D9534F] hover:border-[#D9534F]/50 transition-colors"
-              >
-                <RotateCcw size={13} />
-                <span>DISCARD DRAFT</span>
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between">
+              <button type="button" onClick={() => setStep(1)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                Back
               </button>
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-[6px] border border-[#3DDC84] bg-[#3DDC84] text-[#0B0F14] hover:bg-[#3DDC84]/90 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] disabled:opacity-50 transition-colors"
-              >
-                <PlusCircle size={14} />
-                <span>{busy ? "INGESTING CASE..." : "OPEN CASE FILE & START INGESTION"}</span>
+              <button type="button" onClick={() => setStep(3)}
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700 transition">
+                Next: Review <ChevronRight size={15} />
               </button>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ── Step 3: Review & Submit ──────────────────────────────── */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <h2 className="text-sm font-bold text-slate-800">Review & Submit</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Check the information before submitting.</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <ReviewRow label="Scheme"        value={schemes.find(s => s.id === schemeId)?.name} />
+                <ReviewRow label="Applicant"     value={applicant} />
+                <ReviewRow label="Organisation"  value={orgName} />
+                <ReviewRow label="Project Title" value={projTitle} />
+                <ReviewRow label="Category"      value={projCat} />
+                <ReviewRow label="Location"      value={location} />
+                <ReviewRow label="Cost"          value={cost ? `₹${Number(cost).toLocaleString("en-IN")}` : null} />
+                <ReviewRow label="Duration"      value={duration ? `${duration} months` : null} />
+                <ReviewRow label="Documents"     value={files.length > 0 ? `${files.length} file(s)` : "None uploaded"} />
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between">
+                <button type="button" onClick={() => setStep(2)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                  Back
+                </button>
+                <button type="submit" disabled={busy}
+                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-teal-700 transition disabled:opacity-50 shadow-sm">
+                  {busy ? <><Loader2 size={15} className="animate-spin" /> Submitting…</> : "Submit Application"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
+    </div>
+  );
+}
+
+/* ── Sub-components ───────────────────────────────────────────────── */
+function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+        {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex items-baseline gap-4 py-1.5 border-b border-slate-50 last:border-0">
+      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide w-32 shrink-0">{label}</span>
+      <span className="text-sm text-slate-800">{value || <span className="italic text-slate-300">—</span>}</span>
     </div>
   );
 }

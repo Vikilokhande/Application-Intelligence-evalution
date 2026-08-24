@@ -101,6 +101,7 @@ def build_validation_summary(results: list[ValidationResult]) -> dict[str, Any]:
     failed = sum(1 for item in results if item.status == "FAIL")
     warnings = sum(1 for item in results if item.status == "WARN")
     not_checked = sum(1 for item in results if item.status == "NOT_CHECKED")
+    not_verifiable = sum(1 for item in results if item.status == "NOT_VERIFIABLE")
     severity_counts = _severity_counts(results)
     confidences = [
         float((item.evidence or {}).get("confidence", 0.0))
@@ -109,7 +110,9 @@ def build_validation_summary(results: list[ValidationResult]) -> dict[str, Any]:
     ]
     if failed or severity_counts["CRITICAL"] or severity_counts["ERROR"]:
         overall = "FAIL"
-    elif warnings:
+    elif total and not_verifiable == total:
+        overall = "NOT_VERIFIABLE"
+    elif warnings or not_verifiable:
         overall = "WARNING"
     elif total and not_checked == total:
         overall = "NOT_CHECKED"
@@ -124,6 +127,7 @@ def build_validation_summary(results: list[ValidationResult]) -> dict[str, Any]:
         "failed": failed,
         "warnings": warnings,
         "not_checked": not_checked,
+        "not_verifiable": not_verifiable,
         "critical_count": severity_counts["CRITICAL"],
         "error_count": severity_counts["ERROR"],
         "warning_count": severity_counts["WARNING"],
@@ -136,6 +140,12 @@ class ValidationService:
     def validate(self, db: Session, application: Application, profile: dict[str, Any], scheme: Scheme | None) -> list[ValidationResult]:
         started = time.monotonic()
         db.execute(delete(ValidationResult).where(ValidationResult.application_id == application.id))
+        validation_evidence_types = list(RAG_TYPES) + ["CROSS_DOCUMENT_CONTRADICTION"]
+        db.execute(
+            delete(Evidence)
+            .where(Evidence.application_id == application.id)
+            .where(Evidence.finding_type.in_(validation_evidence_types))
+        )
         documents = db.scalars(select(Document).where(Document.application_id == application.id)).all()
         results: list[ValidationResult] = []
 
@@ -245,9 +255,11 @@ class ValidationService:
         payload.setdefault("check_id", check_id or validation_type)
         payload.setdefault("name", name or validation_type.replace("_", " ").title())
         payload.setdefault("status", status)
+        payload.setdefault("validation_status", status)
         payload.setdefault("severity", severity)
         payload.setdefault("confidence", 1.0 if confidence is None and status in {"PASS", "FAIL"} else confidence or 0.0)
         payload.setdefault("reason", message)
+        payload.setdefault("explanation", message)
         payload.setdefault("expected", expected or {})
         payload.setdefault("actual", actual or {})
         payload.setdefault("evidence", evidence_items or [])
@@ -256,6 +268,7 @@ class ValidationService:
         payload.setdefault("rule_version", rule_version)
         payload.setdefault("validator", validator)
         payload.setdefault("generated_at", _utc_iso())
+        self._apply_reviewer_evidence_contract(payload, status, message, expected, actual, evidence_items)
         return ValidationResult(
             application_id=application_id,
             validation_type=validation_type,
@@ -264,6 +277,106 @@ class ValidationService:
             severity=severity,
             evidence=payload,
         )
+
+    def _apply_reviewer_evidence_contract(
+        self,
+        payload: dict[str, Any],
+        status: str,
+        message: str,
+        expected: dict[str, Any] | None,
+        actual: dict[str, Any] | None,
+        evidence_items: list[dict[str, Any]] | None,
+    ) -> None:
+        """Expose real, reviewer-facing fields without inventing unavailable evidence."""
+        expected = expected or {}
+        actual = actual or {}
+        first_evidence = next((item for item in evidence_items or [] if isinstance(item, dict)), {})
+
+        field_name = (
+            payload.get("field_name")
+            or payload.get("field")
+            or payload.get("applied_field")
+            or actual.get("field")
+            or expected.get("field")
+        )
+        if field_name is not None:
+            payload.setdefault("field_name", field_name)
+
+        extracted_value = self._first_present(
+            payload.get("extracted_value"),
+            payload.get("actual_value"),
+            payload.get("actual") if not isinstance(payload.get("actual"), dict) else None,
+            actual.get("value"),
+        )
+        if extracted_value is not None:
+            payload.setdefault("extracted_value", extracted_value)
+            payload.setdefault("actual_value", extracted_value)
+
+        expected_value = self._first_present(
+            payload.get("expected_value"),
+            payload.get("expected_max"),
+            payload.get("retrieved_limit"),
+            expected.get("value"),
+            expected.get("max"),
+            expected.get("allowed_values"),
+            expected.get("required_documents"),
+            payload.get("extracted_guideline"),
+        )
+        if expected_value is not None:
+            payload.setdefault("expected_value", expected_value)
+
+        evidence_source = self._first_present(
+            payload.get("evidence_source"),
+            payload.get("retrieved_source"),
+            payload.get("knowledge_base_document"),
+            payload.get("filename"),
+            payload.get("source"),
+            first_evidence.get("filename"),
+            first_evidence.get("source"),
+        )
+        if evidence_source is not None:
+            payload.setdefault("evidence_source", evidence_source)
+
+        source_type = self._first_present(
+            payload.get("source_type"),
+            payload.get("source"),
+            "knowledge_base" if payload.get("knowledge_base_document") else None,
+            first_evidence.get("source_type"),
+            first_evidence.get("source"),
+        )
+        if source_type is not None:
+            payload.setdefault("source_type", source_type)
+
+        document_id = self._first_present(
+            payload.get("document_id"),
+            actual.get("document_id"),
+            first_evidence.get("document_id"),
+        )
+        if document_id is not None:
+            payload.setdefault("document_id", document_id)
+
+        page_or_section = self._first_present(
+            payload.get("page"),
+            payload.get("section"),
+            payload.get("page_section"),
+            payload.get("locator"),
+            first_evidence.get("page"),
+            first_evidence.get("section"),
+            first_evidence.get("locator"),
+        )
+        if page_or_section is not None:
+            payload.setdefault("page_section", page_or_section)
+
+        payload.setdefault("rule_id", payload.get("check_id"))
+        payload.setdefault("decision", status)
+        payload.setdefault("explanation", message)
+
+    @staticmethod
+    def _first_present(*values: Any) -> Any:
+        for value in values:
+            if value not in (None, ""):
+                return value
+        return None
 
     def _required_fields(self, application_id: str, profile: dict[str, Any]) -> list[ValidationResult]:
         required = {
@@ -275,10 +388,37 @@ class ValidationService:
         results: list[ValidationResult] = []
         for path, message in required.items():
             value = get_profile_value(profile, path)
+            field_evidence = self._field_evidence(profile, path)
+            expected = {"field": path, "required": True}
+            actual = {"field": path, "value": value}
             if value in (None, ""):
-                results.append(self._result(application_id, "REQUIRED_FIELD", "FAIL", message, "ERROR", {"field": path}))
+                results.append(
+                    self._result(
+                        application_id,
+                        "REQUIRED_FIELD",
+                        "NOT_VERIFIABLE",
+                        f"{message} Required evidence unavailable.",
+                        "WARNING",
+                        {"field": path, **field_evidence, "missing_reason": "Required evidence unavailable"},
+                        expected=expected,
+                        actual=actual,
+                        confidence=0.0,
+                    )
+                )
             else:
-                results.append(self._result(application_id, "REQUIRED_FIELD", "PASS", f"{path} is present.", "INFO", {"field": path}))
+                results.append(
+                    self._result(
+                        application_id,
+                        "REQUIRED_FIELD",
+                        "PASS",
+                        f"{path} is present.",
+                        "INFO",
+                        {"field": path, **field_evidence},
+                        expected=expected,
+                        actual=actual,
+                        confidence=field_evidence.get("confidence"),
+                    )
+                )
         return results
 
     def _completeness(self, application_id: str, profile: dict[str, Any]) -> ValidationResult:
@@ -293,6 +433,9 @@ class ValidationService:
             f"Application field completeness is {score:.0%}.",
             "WARNING" if status == "WARN" else "ERROR" if status == "FAIL" else "INFO",
             {"score": score, "present": present, "required": len(fields)},
+            expected={"required_fields": fields, "required_count": len(fields)},
+            actual={"present_count": present, "missing_fields": [field for field in fields if get_profile_value(profile, field) in (None, "")]},
+            confidence=score,
         )
 
     def _required_documents(
@@ -313,6 +456,9 @@ class ValidationService:
                     "No active required-document rule is configured for this scheme.",
                     "WARNING",
                     {"required": [], "present": present, "missing": [], "configuration_missing": True},
+                    expected={"required_documents": []},
+                    actual={"present_documents": present, "missing_documents": []},
+                    confidence=0.0,
                 )
             ]
         present = {document.document_type for document in documents}
@@ -326,6 +472,9 @@ class ValidationService:
                 "All required documents are present." if not missing else f"Missing required documents: {', '.join(missing)}.",
                 "ERROR" if missing else "INFO",
                 {"required": required, "present": sorted(present), "missing": missing},
+                expected={"required_documents": required},
+                actual={"present_documents": sorted(present), "missing_documents": missing},
+                confidence=1.0,
             )
         ]
 
@@ -333,8 +482,8 @@ class ValidationService:
         results: list[ValidationResult] = []
         cost = get_profile_value(profile, "financial.project_cost")
         duration = get_profile_value(profile, "timeline.duration_months")
-        results.append(self._numeric_check(application_id, "DATA_RANGE", "financial.project_cost", cost, min_value=1))
-        results.append(self._numeric_check(application_id, "DATA_RANGE", "timeline.duration_months", duration, min_value=1, max_value=120))
+        results.append(self._numeric_check(application_id, "DATA_RANGE", "financial.project_cost", cost, profile, min_value=1))
+        results.append(self._numeric_check(application_id, "DATA_RANGE", "timeline.duration_months", duration, profile, min_value=1, max_value=120))
         return results
 
     def _numeric_check(
@@ -343,26 +492,106 @@ class ValidationService:
         validation_type: str,
         field: str,
         value: Any,
+        profile: dict[str, Any],
         min_value: float | None = None,
         max_value: float | None = None,
     ) -> ValidationResult:
+        field_evidence = self._field_evidence(profile, field)
+        expected = {"field": field}
+        if min_value is not None:
+            expected["min"] = min_value
+        if max_value is not None:
+            expected["max"] = max_value
+        actual = {"field": field, "value": value}
         if value in (None, ""):
-            return self._result(application_id, validation_type, "FAIL", f"{field} is missing.", "ERROR", {"field": field})
+            return self._result(
+                application_id,
+                validation_type,
+                "NOT_VERIFIABLE",
+                f"{field} is missing. Required evidence unavailable.",
+                "WARNING",
+                {"field": field, **field_evidence, "missing_reason": "Required evidence unavailable"},
+                expected=expected,
+                actual=actual,
+                confidence=0.0,
+            )
         try:
             numeric = float(value)
         except (TypeError, ValueError):
-            return self._result(application_id, validation_type, "FAIL", f"{field} is not numeric.", "ERROR", {"field": field, "actual": value})
+            return self._result(
+                application_id,
+                validation_type,
+                "FAIL",
+                f"{field} is not numeric.",
+                "ERROR",
+                {"field": field, **field_evidence, "actual": value},
+                expected=expected,
+                actual=actual,
+                confidence=field_evidence.get("confidence"),
+            )
+        actual = {"field": field, "value": numeric}
         if min_value is not None and numeric < min_value:
-            return self._result(application_id, validation_type, "FAIL", f"{field} is below allowed range.", "ERROR", {"field": field, "actual": numeric})
+            return self._result(
+                application_id,
+                validation_type,
+                "FAIL",
+                f"{field} is below allowed range.",
+                "ERROR",
+                {"field": field, **field_evidence, "actual": numeric},
+                expected=expected,
+                actual=actual,
+                confidence=field_evidence.get("confidence"),
+            )
         if max_value is not None and numeric > max_value:
-            return self._result(application_id, validation_type, "FAIL", f"{field} is above allowed range.", "ERROR", {"field": field, "actual": numeric})
-        return self._result(application_id, validation_type, "PASS", f"{field} is within expected range.", "INFO", {"field": field, "actual": numeric})
+            return self._result(
+                application_id,
+                validation_type,
+                "FAIL",
+                f"{field} is above allowed range.",
+                "ERROR",
+                {"field": field, **field_evidence, "actual": numeric},
+                expected=expected,
+                actual=actual,
+                confidence=field_evidence.get("confidence"),
+            )
+        return self._result(
+            application_id,
+            validation_type,
+            "PASS",
+            f"{field} is within expected range.",
+            "INFO",
+            {"field": field, **field_evidence, "actual": numeric},
+            expected=expected,
+            actual=actual,
+            confidence=field_evidence.get("confidence"),
+        )
 
     def _business_rule_precheck(self, application_id: str, profile: dict[str, Any]) -> ValidationResult:
         org_type = get_profile_value(profile, "applicant.organization_type")
+        field_evidence = self._field_evidence(profile, "applicant.organization_type")
         if not org_type:
-            return self._result(application_id, "BUSINESS_RULE_PRECHECK", "WARN", "Organization type is missing and may affect eligibility.", "WARNING")
-        return self._result(application_id, "BUSINESS_RULE_PRECHECK", "PASS", "Basic business-rule prerequisites are available.")
+            return self._result(
+                application_id,
+                "BUSINESS_RULE_PRECHECK",
+                "NOT_VERIFIABLE",
+                "Organization type is missing and may affect eligibility. Required evidence unavailable.",
+                "WARNING",
+                {"field": "applicant.organization_type", **field_evidence, "missing_reason": "Required evidence unavailable"},
+                expected={"field": "applicant.organization_type", "required": True},
+                actual={"field": "applicant.organization_type", "value": org_type},
+                confidence=0.0,
+            )
+        return self._result(
+            application_id,
+            "BUSINESS_RULE_PRECHECK",
+            "PASS",
+            "Basic business-rule prerequisites are available.",
+            "INFO",
+            {"field": "applicant.organization_type", **field_evidence},
+            expected={"field": "applicant.organization_type", "required": True},
+            actual={"field": "applicant.organization_type", "value": org_type},
+            confidence=field_evidence.get("confidence"),
+        )
 
     def _document_llm_validation(
         self,
@@ -547,7 +776,7 @@ class ValidationService:
                 self._result(
                     application_id,
                     "SCHEME_KNOWLEDGE_RETRIEVAL",
-                    "NOT_CHECKED",
+                    "NOT_VERIFIABLE",
                     "No scheme is linked, so scheme knowledge validation could not run.",
                     "WARNING",
                     check_id="RAG_SCHEME_NOT_LINKED",
@@ -566,10 +795,10 @@ class ValidationService:
                 self._result(
                     application_id,
                     "SCHEME_KNOWLEDGE_RETRIEVAL",
-                    "NOT_CHECKED",
+                    "NOT_VERIFIABLE",
                     "Scheme knowledge retrieval is unavailable; validation used database rules only.",
                     "WARNING",
-                    {"error": str(exc), "scheme_id": scheme.id},
+                    {"error": str(exc), "scheme_id": scheme.id, "decision": "NOT_VERIFIABLE"},
                     check_id="RAG_RETRIEVAL_UNAVAILABLE",
                     confidence=0.0,
                 )
@@ -580,10 +809,10 @@ class ValidationService:
                 self._result(
                     application_id,
                     "SCHEME_KNOWLEDGE_RETRIEVAL",
-                    "NOT_CHECKED",
+                    "NOT_VERIFIABLE",
                     "No relevant scheme guideline chunks were retrieved.",
                     "WARNING",
-                    {"scheme_id": scheme.id, "query": query},
+                    {"scheme_id": scheme.id, "query": query, "decision": "NOT_VERIFIABLE"},
                     check_id="RAG_NO_RELEVANT_CHUNKS",
                     confidence=0.0,
                 )
@@ -610,6 +839,7 @@ class ValidationService:
                 "scheme": item.get("scheme"),
                 "chunk_id": item.get("chunk_id"),
                 "score": item.get("score"),
+                "retrieval_confidence": self._source_confidence(item),
                 "text_excerpt": str(item.get("text", ""))[:400],
             }
             for item in retrieved
@@ -622,7 +852,14 @@ class ValidationService:
                 "PASS",
                 "Scheme knowledge retrieved and used for guideline validation.",
                 "INFO",
-                {"scheme_id": scheme.id, "query": query, "chunks": evidence_chunks},
+                {
+                    "scheme_id": scheme.id,
+                    "query": query,
+                    "chunks": evidence_chunks,
+                    "criterion": "scheme_guideline_retrieval",
+                    "decision": "PASS",
+                    "retrieval_confidence": self._retrieval_confidence(retrieved),
+                },
                 check_id="RAG_RETRIEVAL",
                 confidence=self._retrieval_confidence(retrieved),
             )
@@ -703,11 +940,18 @@ class ValidationService:
                     {
                         "query": query,
                         "retrieved_source": docs_source.get("source"),
+                        "knowledge_base_document": docs_source.get("source"),
+                        "knowledge_base_chunk": docs_source.get("chunk_id"),
+                        "evidence_text": str(docs_source.get("text", ""))[:500],
                         "relevance_score": docs_source.get("score"),
+                        "retrieval_confidence": self._source_confidence(docs_source),
                         "extracted_guideline": {"required_documents": required_docs},
                         "applied_field": "documents.document_type",
                         "actual_value": present_docs,
                         "missing": missing,
+                        "rule_id": "RAG_REQUIRED_DOCUMENTS",
+                        "criterion": "required supporting documents",
+                        "decision": "PASS" if not missing else "FAIL",
                     },
                     check_id="RAG_REQUIRED_DOCUMENTS",
                     expected={"required_documents": required_docs},
@@ -722,10 +966,15 @@ class ValidationService:
                 self._result(
                     application_id,
                     "RAG_SCHEME_VALIDATION",
-                    "NOT_CHECKED",
+                    "NOT_VERIFIABLE",
                     "Scheme knowledge was retrieved, but no machine-readable limit was found.",
                     "WARNING",
-                    {"scheme_id": scheme.id, "chunks": evidence_chunks},
+                    {
+                        "scheme_id": scheme.id,
+                        "chunks": evidence_chunks,
+                        "criterion": "machine-readable scheme guideline",
+                        "decision": "NOT_VERIFIABLE",
+                    },
                     check_id="RAG_NO_MACHINE_READABLE_GUIDELINE",
                     confidence=0.0,
                 )
@@ -734,17 +983,28 @@ class ValidationService:
         # Emit [RAG_EVIDENCE] decision log for each check built from retrieved chunks
         for result in results:
             check_id = (result.evidence or {}).get("check_id", result.validation_type)
-            source = (result.evidence or {}).get("retrieved_source", "")
-            retrieval_conf = float((result.evidence or {}).get("relevance_score") or (result.evidence or {}).get("confidence") or 0.0)
+            source = (
+                (result.evidence or {}).get("knowledge_base_document")
+                or (result.evidence or {}).get("retrieved_source")
+                or ""
+            )
+            chunk = (result.evidence or {}).get("knowledge_base_chunk", "")
+            retrieval_conf = float(
+                (result.evidence or {}).get("retrieval_confidence")
+                or (result.evidence or {}).get("confidence")
+                or 0.0
+            )
             if source or check_id.startswith("RAG_"):
                 logger.info(
-                    "[RAG_EVIDENCE] application=%s rule_id=%s source=%s decision=%s retrieval_confidence=%.3f",
+                    "[RAG_EVIDENCE] application=%s rule_id=%s document=%s chunk=%s retrieval_confidence=%.3f decision=%s",
                     application_id,
                     check_id,
                     source or "knowledge_base",
-                    result.status,
+                    chunk or "",
                     retrieval_conf,
+                    result.status,
                 )
+                self._persist_rag_evidence(db, application_id, result)
 
         audit_service.record(
             db,
@@ -760,6 +1020,43 @@ class ValidationService:
             },
         )
         return results
+
+    def _persist_rag_evidence(self, db: Session, application_id: str, result: ValidationResult) -> None:
+        evidence = result.evidence or {}
+        if evidence.get("validator") != "rag" and not str(result.validation_type).startswith("RAG_"):
+            return
+
+        chunks = evidence.get("chunks") if isinstance(evidence.get("chunks"), list) else []
+        first_chunk = next((item for item in chunks if isinstance(item, dict)), {})
+        source = (
+            evidence.get("knowledge_base_document")
+            or evidence.get("retrieved_source")
+            or first_chunk.get("source")
+            or "knowledge_base"
+        )
+        chunk_id = evidence.get("knowledge_base_chunk") or first_chunk.get("chunk_id")
+        evidence_text = evidence.get("evidence_text") or first_chunk.get("text_excerpt")
+        metadata = {
+            **evidence,
+            "knowledge_base_document": source,
+            "knowledge_base_chunk": chunk_id,
+            "evidence_text": evidence_text,
+            "retrieval_confidence": evidence.get("retrieval_confidence", evidence.get("confidence", 0.0)),
+            "decision": result.status,
+        }
+        db.add(
+            Evidence(
+                application_id=application_id,
+                document_id=None,
+                finding_type=result.validation_type,
+                source=str(source),
+                locator=str(chunk_id) if chunk_id else None,
+                field_name=evidence.get("field_name") or evidence.get("field") or evidence.get("applied_field"),
+                extracted_value=str(evidence.get("actual_value")) if evidence.get("actual_value") not in (None, "") else None,
+                confidence=float(metadata.get("retrieval_confidence") or 0.0),
+                metadata_json=metadata,
+            )
+        )
 
     def _extract_cost_limit(self, retrieved: list[dict[str, Any]]) -> tuple[float | None, dict[str, Any]]:
         for item in retrieved:
@@ -836,10 +1133,15 @@ class ValidationService:
     def _knowledge_evidence_item(self, source: dict[str, Any]) -> dict[str, Any]:
         return {
             "source": source.get("source"),
+            "knowledge_base_document": source.get("source"),
             "scheme": source.get("scheme"),
             "chunk_id": source.get("chunk_id"),
+            "knowledge_base_chunk": source.get("chunk_id"),
             "relevance_score": source.get("score"),
+            "retrieval_confidence": self._source_confidence(source),
             "text_excerpt": str(source.get("text", ""))[:500],
+            "evidence_text": str(source.get("text", ""))[:500],
+            "source_type": "knowledge_base",
         }
 
     def _compare_knowledge_numeric_limit(
@@ -871,8 +1173,10 @@ class ValidationService:
             "knowledge_base_chunk": source_chunk,
             "evidence_text": source_text,
             "relevance_score": source.get("score"),
+            "retrieval_confidence": self._source_confidence(source),
             "extracted_guideline": {"maximum": expected_max},
             "rule_id": validation_type,
+            "criterion": f"{field} maximum {expected_max}",
             "knowledge_source": {
                 "source": source_doc,
                 "scheme": source.get("scheme"),
@@ -883,6 +1187,7 @@ class ValidationService:
             "terminology": "Potential policy inconsistency; requires reviewer verification.",
         }
         if actual is None or str(actual).strip() == "":
+            evidence["decision"] = "NOT_VERIFIABLE"
             # Field absent → NOT_VERIFIABLE, not WARN
             return self._result(
                 application_id,
@@ -904,6 +1209,7 @@ class ValidationService:
         try:
             actual_number = float(actual)
         except (TypeError, ValueError):
+            evidence["decision"] = "NOT_VERIFIABLE"
             return self._result(
                 application_id,
                 validation_type,
@@ -922,6 +1228,7 @@ class ValidationService:
         evidence["actual_value"] = actual_number
         confidence = self._source_confidence(source)
         if actual_number <= expected_max:
+            evidence["decision"] = "PASS"
             return self._result(
                 application_id,
                 validation_type,
@@ -936,6 +1243,7 @@ class ValidationService:
                 evidence_items=[self._knowledge_evidence_item(source)],
             )
 
+        evidence["decision"] = "FAIL"
         db.add(
             Evidence(
                 application_id=application_id,
@@ -1004,10 +1312,13 @@ class ValidationService:
             "knowledge_base_chunk": source_chunk,
             "evidence_text": source_text,
             "relevance_score": source.get("score"),
+            "retrieval_confidence": self._source_confidence(source),
             "extracted_guideline": {"allowed_values": allowed_values},
             "applied_field": field,
             "actual_value": actual,
             "rule_id": validation_type,
+            "criterion": f"{field} must match one retrieved allowed value",
+            "decision": status,
         }
         return self._result(
             application_id,
@@ -1026,6 +1337,8 @@ class ValidationService:
     def _cross_document_consistency(
         self, db: Session, application_id: str, profile: dict[str, Any]
     ) -> list[ValidationResult]:
+        documents = db.scalars(select(Document).where(Document.application_id == application_id)).all()
+        total_documents = len(documents)
         fields = {
             "applicant.name": ("applicant_name", "text"),
             "applicant.organization_type": ("organization_type", "text"),
@@ -1033,17 +1346,22 @@ class ValidationService:
             "project.category": ("project_category", "text"),
             "financial.project_cost": ("project_cost", "numeric"),
             "timeline.duration_months": ("duration_months", "numeric"),
+            "certificates.certificate_number": ("certificate_information", "text"),
         }
         results: list[ValidationResult] = []
         for profile_path, (field_name, compare_type) in fields.items():
             values = self._raw_values_for(profile, profile_path)
-            by_source = [
+            document_values = [
                 item for item in values
                 if item.get("document_id") and item.get("value") not in (None, "")
             ]
+            form_values = [
+                item for item in values
+                if not item.get("document_id") and item.get("value") not in (None, "")
+            ]
+            by_source = self._distinct_document_values(document_values)
             if len(by_source) < 2:
                 # NOT_VERIFIABLE = evidence unavailable; NOT_CHECKED = deliberately skipped
-                status = "NOT_VERIFIABLE"
                 doc_count = len(by_source)
                 reason = (
                     f"{profile_path} — only {doc_count} document-derived value(s) found; "
@@ -1055,21 +1373,52 @@ class ValidationService:
                         application_id,
                         "CROSS_DOCUMENT_CONSISTENCY",
                         "NOT_VERIFIABLE",
-                        reason,
-                        "INFO",
+                        (
+                            "Cross-document comparison requires additional supporting documents. Required evidence unavailable."
+                            if total_documents < 2
+                            else (
+                                f"{profile_path} has only {doc_count} distinct document-derived value(s); "
+                                "cross-document comparison requires at least 2 uploaded documents with the same field extracted. "
+                                "Required evidence unavailable."
+                            )
+                        ),
+                        "WARNING",
                         {
                             "field": profile_path,
                             "values": by_source,
+                            "form_values": form_values,
                             "doc_count": doc_count,
+                            "total_document_count": total_documents,
                             "not_verifiable_reason": "Fewer than 2 documents contain this field — comparison not possible",
                         },
                         check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
+                        expected={"field": profile_path, "minimum_distinct_documents": 2},
+                        actual={"document_values": by_source, "form_values": form_values},
                         confidence=0.0,
                     )
                 )
                 continue
 
             contradiction, payload = self._compare_source_values(profile_path, by_source, compare_type)
+            payload["form_values"] = form_values
+            if payload.get("status") == "NOT_VERIFIABLE":
+                results.append(
+                    self._result(
+                        application_id,
+                        "CROSS_DOCUMENT_CONSISTENCY",
+                        "NOT_VERIFIABLE",
+                        f"{profile_path} could not be compared across documents. Required evidence unavailable.",
+                        "WARNING",
+                        payload,
+                        check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
+                        confidence=0.0,
+                        expected={"field": profile_path, "comparison": "matching values from at least two uploaded documents"},
+                        actual={"values": payload.get("values", []), "form_values": form_values},
+                        evidence_items=payload.get("documents", []),
+                        source_documents=[str(item.get("document_id")) for item in by_source],
+                    )
+                )
+                continue
             if not contradiction:
                 results.append(
                     self._result(
@@ -1081,6 +1430,7 @@ class ValidationService:
                         payload,
                         check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
                         confidence=1.0,
+                        expected={"field": profile_path, "comparison": "all uploaded document values agree"},
                         actual={"values": payload.get("values", [])},
                         evidence_items=payload.get("documents", []),
                         source_documents=[str(item.get("document_id")) for item in by_source],
@@ -1122,12 +1472,24 @@ class ValidationService:
                     payload,
                     check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
                     confidence=1.0,
+                    expected={"field": profile_path, "comparison": "all uploaded document values agree"},
                     actual={"values": payload.get("values", [])},
                     evidence_items=payload.get("documents", []),
                     source_documents=[str(item.get("document_id")) for item in by_source],
                 )
             )
         return results
+
+    def _distinct_document_values(self, values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        by_document: dict[str, dict[str, Any]] = {}
+        for item in values:
+            document_id = str(item.get("document_id") or "")
+            if not document_id or item.get("value") in (None, ""):
+                continue
+            current = by_document.get(document_id)
+            if current is None or float(item.get("confidence") or 0.0) > float(current.get("confidence") or 0.0):
+                by_document[document_id] = item
+        return list(by_document.values())
 
     def _raw_values_for(self, profile: dict[str, Any], dotted_path: str) -> list[dict[str, Any]]:
         current: Any = profile
@@ -1139,6 +1501,35 @@ class ValidationService:
             values = current.get("raw_values", [])
             return values if isinstance(values, list) else []
         return []
+
+    def _field_evidence(self, profile: dict[str, Any], dotted_path: str) -> dict[str, Any]:
+        selected_value = get_profile_value(profile, dotted_path)
+        raw_values = [
+            item for item in self._raw_values_for(profile, dotted_path)
+            if isinstance(item, dict) and item.get("value") not in (None, "")
+        ]
+        if not raw_values:
+            return {}
+
+        def _matches_selected(item: dict[str, Any]) -> bool:
+            return self._normalize_text_value(item.get("value")) == self._normalize_text_value(selected_value)
+
+        selected_source = next((item for item in raw_values if _matches_selected(item)), None)
+        if selected_source is None:
+            selected_source = sorted(raw_values, key=lambda item: float(item.get("confidence") or 0.0), reverse=True)[0]
+
+        evidence: dict[str, Any] = {
+            "field_name": dotted_path,
+            "extracted_value": selected_value,
+            "actual_value": selected_value,
+            "evidence_source": selected_source.get("filename") or selected_source.get("source"),
+            "source_type": selected_source.get("source"),
+            "document_id": selected_source.get("document_id"),
+            "page_section": selected_source.get("locator"),
+            "locator": selected_source.get("locator"),
+            "confidence": float(selected_source.get("confidence") or 0.0),
+        }
+        return {key: value for key, value in evidence.items() if value not in (None, "")}
 
     def _compare_source_values(
         self,
@@ -1161,6 +1552,7 @@ class ValidationService:
             "documents": documents,
             "values": [item.get("value") for item in values],
             "status": "CONSISTENT",
+            "decision": "PASS",
             "severity": "INFO",
             "confidence": 1.0,
         }
@@ -1172,7 +1564,7 @@ class ValidationService:
                 except (TypeError, ValueError):
                     continue
             if len(numeric) < 2:
-                payload["status"] = "NOT_CHECKED"
+                payload.update({"status": "NOT_VERIFIABLE", "decision": "NOT_VERIFIABLE", "confidence": 0.0})
                 return False, payload
             low_value, low_item = min(numeric, key=lambda item: item[0])
             high_value, high_item = max(numeric, key=lambda item: item[0])
@@ -1184,14 +1576,14 @@ class ValidationService:
             difference = high_value - low_value
             payload.update({"difference": difference, "tolerance": tolerance, "min_item": low_item, "max_item": high_item})
             if difference > tolerance:
-                payload.update({"status": "CONTRADICTION", "severity": "ERROR"})
+                payload.update({"status": "CONTRADICTION", "decision": "FAIL", "severity": "ERROR"})
                 return True, payload
             return False, payload
 
         normalized = {self._normalize_text_value(item.get("value")) for item in values}
         normalized.discard("")
         if len(normalized) > 1:
-            payload.update({"status": "CONTRADICTION", "severity": "ERROR", "normalized_values": sorted(normalized)})
+            payload.update({"status": "CONTRADICTION", "decision": "FAIL", "severity": "ERROR", "normalized_values": sorted(normalized)})
             return True, payload
         return False, payload
 

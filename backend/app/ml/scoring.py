@@ -98,8 +98,8 @@ class XGBoostScoringService(ScoringService):
     Never fabricates predictions.
     """
 
-    def __init__(self, artifacts_dir: Path | None = None) -> None:
-        self._artifacts_dir = artifacts_dir or _ARTIFACTS_DIR
+    def __init__(self, artifacts_dir: Path | None = None, model_path: str | Path | None = None) -> None:
+        self._artifacts_dir = Path(model_path).parent if model_path is not None else (artifacts_dir or _ARTIFACTS_DIR)
         self._classifier: Any = None      # risk_classifier.ubj
         self._risk_reg: Any = None        # risk_regressor.ubj
         self._quality_reg: Any = None     # quality_regressor.ubj
@@ -196,13 +196,18 @@ class XGBoostScoringService(ScoringService):
         # Feature importance contributions from the classifier
         try:
             importance_scores = self._classifier.get_booster().get_score(importance_type="gain")
-            total_gain = sum(importance_scores.values()) or 1.0
-            feature_contributions = {
-                name: round(importance_scores.get(f"f{i}", 0.0) / total_gain, 4)
-                for i, name in enumerate(FEATURE_NAMES)
-            }
+            total_gain = sum(float(value) for value in importance_scores.values())
+            if total_gain <= 0:
+                feature_contributions = {}
+            else:
+                feature_contributions = {
+                    name: round(float(importance_scores[key]) / total_gain, 4)
+                    for i, name in enumerate(FEATURE_NAMES)
+                    for key in (f"f{i}", name)
+                    if key in importance_scores
+                }
         except Exception:
-            feature_contributions = {name: 0.0 for name in FEATURE_NAMES}
+            feature_contributions = {}
 
         class_probabilities = {
             "LOW_RISK": round(float(proba[0]), 4),
@@ -258,7 +263,7 @@ class BaselineScoringService(ScoringService):
     """
 
     def score(self, features: dict[str, float]) -> dict[str, Any]:
-        doc_completeness = features.get("document_completeness", 0.5)
+        doc_completeness = features.get("document_completeness", features.get("document_completeness_ratio", 0.5))
         field_completeness = features.get("required_field_completeness", 0.5)
         eligibility_ratio = features.get("eligibility_pass_ratio", 0.5)
         budget_ok = features.get("budget_consistency", 1.0)
@@ -298,14 +303,30 @@ class BaselineScoringService(ScoringService):
         else:
             prediction_class = "LOW_RISK"
 
+        top_risk_factors: list[str] = []
+        if features.get("missing_document_count", 0.0) or doc_completeness < 1.0:
+            top_risk_factors.append("required_documents_missing")
+        if features.get("financial_rule_fail_count", 0.0) or budget_ok < 1.0:
+            top_risk_factors.append("financial_rule_failed")
+        if features.get("duration_rule_fail_count", 0.0):
+            top_risk_factors.append("duration_rule_failed")
+        if features.get("eligibility_rule_fail_count", 0.0) or eligibility_ratio < 1.0:
+            top_risk_factors.append("eligibility_rule_failed")
+        if contradictions > 0:
+            top_risk_factors.append("cross_document_contradiction")
+        if suspicious > 0:
+            top_risk_factors.append("suspicious_indicators")
+
         return {
             "model_name": "BaselineRuleScorer",
             "model_version": "1.0-baseline",
             "feature_version": FEATURE_SCHEMA_VERSION,
+            "feature_schema_version": "1.1",
             "risk_score": round(risk_score, 1),
             "quality_score": round(quality_score, 1),
             "confidence": round(confidence, 3),
             "prediction_class": prediction_class,
+            "top_risk_factors": top_risk_factors,
             "feature_contributions": {},
             "status": "GENERATED_DEVELOPMENT_MODEL",
             "provider": "baseline",
@@ -383,7 +404,7 @@ class PredictionPersistenceService:
                 "quality_score": None,
                 "confidence": 0.0,
                 "prediction_class": "UNAVAILABLE",
-                "class_probabilities": {"LOW_RISK": 0.0, "MEDIUM_RISK": 0.0, "HIGH_RISK": 0.0},
+                "class_probabilities": {},
                 "feature_contributions": {},
                 "status": f"{exc.code}: {exc.message}",
                 "provider": "none",
@@ -399,7 +420,10 @@ class PredictionPersistenceService:
             risk_score=prediction_payload.get("risk_score"),
             confidence=prediction_payload.get("confidence", 0.0),
             prediction_class=prediction_payload.get("prediction_class", "UNAVAILABLE"),
-            feature_contributions=prediction_payload.get("feature_contributions", {}),
+            feature_contributions={
+                **(prediction_payload.get("feature_contributions", {}) or {}),
+                **({"_class_probabilities": prediction_payload.get("class_probabilities")} if prediction_payload.get("class_probabilities") else {}),
+            },
             status=prediction_payload.get("status", ""),
             feature_version=prediction_payload.get("feature_version", FEATURE_SCHEMA_VERSION),
             policy_version=settings.routing_policy_version,

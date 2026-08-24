@@ -1,619 +1,485 @@
-// Structural Idea: A forensic environmental policy & scheme governance console pairing live RAG policy query search on the left with human-readable scheme rule threshold management & provisioning on the right.
-
-import type { FormEvent } from "react";
 import { useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
-  CheckSquare,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FileText,
   PlusCircle,
-  Settings2,
-  ShieldCheck,
-  Terminal,
+  Search,
   Trash2,
   TrendingUp,
 } from "lucide-react";
+import { AlertBanner, EmptyState, PageHeader } from "../components/ui";
 import { KnowledgeSearch } from "../components/KnowledgeSearch";
 import type { SchemeRead } from "../types/api";
 
-function getRuleTypeAccent(ruleType: string) {
-  const type = (ruleType ?? "").toLowerCase();
-  if (type.includes("max_value") || type.includes("cost") || type.includes("limit")) {
-    return {
-      border: "border-l-2 border-l-[#3DDC84]",
-      badge: "text-[#3DDC84] bg-[#3DDC84]/10 border-[#3DDC84]/30",
-      icon: <TrendingUp size={13} className="text-[#3DDC84] shrink-0" />,
-    };
+const SEVERITY_OPTIONS = ["ERROR", "WARNING", "INFO"] as const;
+const RULE_TYPE_OPTIONS = [
+  { value: "max_value", label: "Maximum Value" },
+  { value: "min_value", label: "Minimum Value" },
+  { value: "required_field", label: "Required Field" },
+  { value: "required_documents", label: "Required Documents" },
+  { value: "in_set", label: "Allowed Values" },
+  { value: "boolean", label: "Yes/No Requirement" },
+];
+
+function humanRuleType(ruleType: string): { icon: ReactNode; label: string } {
+  const t = ruleType.toLowerCase();
+  if (t.includes("max") || t.includes("cost") || t.includes("value") || t.includes("limit")) {
+    return { icon: <TrendingUp size={13} className="text-emerald-600" />, label: "Financial Limit" };
   }
-  if (type.includes("duration") || type.includes("time")) {
-    return {
-      border: "border-l-2 border-l-[#F0A500]",
-      badge: "text-[#F0A500] bg-[#F0A500]/10 border-[#F0A500]/30",
-      icon: <Clock size={13} className="text-[#F0A500] shrink-0" />,
-    };
+  if (t.includes("duration") || t.includes("time")) {
+    return { icon: <Clock size={13} className="text-amber-600" />, label: "Duration Requirement" };
   }
-  if (type.includes("document")) {
-    return {
-      border: "border-l-2 border-l-[#6366F1]",
-      badge: "text-[#6366F1] bg-[#6366F1]/10 border-[#6366F1]/30",
-      icon: <FileText size={13} className="text-[#6366F1] shrink-0" />,
-    };
+  if (t.includes("doc")) {
+    return { icon: <FileText size={13} className="text-violet-600" />, label: "Document Requirement" };
   }
-  if (type.includes("in_set") || type.includes("eligible")) {
-    return {
-      border: "border-l-2 border-l-[#06B6D4]",
-      badge: "text-[#06B6D4] bg-[#06B6D4]/10 border-[#06B6D4]/30",
-      icon: <CheckSquare size={13} className="text-[#06B6D4] shrink-0" />,
-    };
-  }
-  return {
-    border: "border-l-2 border-l-[#8B5CF6]",
-    badge: "text-[#8B5CF6] bg-[#8B5CF6]/10 border-[#8B5CF6]/30",
-    icon: <ShieldCheck size={13} className="text-[#8B5CF6] shrink-0" />,
-  };
+  return { icon: <CheckCircle2 size={13} className="text-teal-600" />, label: "Eligibility Rule" };
+}
+
+function humanCondition(condition: Record<string, unknown>): string {
+  if (condition.max != null) return `Must not exceed ${formatMoneyOrText(condition.max)}`;
+  if (condition.min != null) return `Must be at least ${formatMoneyOrText(condition.min)}`;
+  if (condition.allowed_values) return `Must be one of: ${toList(condition.allowed_values).join(", ")}`;
+  if (condition.document_types) return `Requires: ${toList(condition.document_types).join(", ")}`;
+  if (condition.required) return "Required field must be provided";
+  if (condition.expected != null) return `Expected: ${String(condition.expected)}`;
+  if (condition.field) return `Checks ${String(condition.field).replaceAll("_", " ")}`;
+  return "Human-readable requirement not configured";
+}
+
+function formatMoneyOrText(value: unknown): string {
+  if (typeof value === "number") return `INR ${value.toLocaleString("en-IN")}`;
+  return String(value);
+}
+
+function toList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(item => String(item)).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map(item => item.trim()).filter(Boolean);
+  return [];
+}
+
+function splitLines(value: string): string[] {
+  return value.split(/\n|,/).map(item => item.trim()).filter(Boolean);
+}
+
+function slug(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 export function SchemeRules({
   schemes,
+  onCreateScheme,
   onCreateRule,
   onDeleteRule,
 }: {
   schemes: SchemeRead[];
-  onCreateRule: (
-    schemeId: string,
-    payload: Record<string, unknown>
-  ) => Promise<void>;
+  onCreateScheme: (payload: Record<string, unknown>) => Promise<void>;
+  onCreateRule: (schemeId: string, payload: Record<string, unknown>) => Promise<void>;
   onDeleteRule?: (schemeId: string, ruleId: string) => Promise<void>;
 }) {
-  const [schemeId, setSchemeId] = useState("");
-  const [ruleId, setRuleId] = useState("MAX_TREE_COST");
-  const [field, setField] = useState("financial.project_cost");
-  const [max, setMax] = useState("5000000");
+  const [selectedScheme, setSelectedScheme] = useState(0);
+  const [showAddScheme, setShowAddScheme] = useState(false);
+  const [showAddRule, setShowAddRule] = useState(false);
+  const [ruleSearch, setRuleSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [expandedRule, setExpandedRule] = useState<string | null>(null);
 
-  const activeScheme =
-    schemes.find((scheme) => scheme.id === (schemeId || schemes[0]?.id)) ??
-    schemes[0];
+  const [schemeName, setSchemeName] = useState("");
+  const [schemeCode, setSchemeCode] = useState("");
+  const [schemePurpose, setSchemePurpose] = useState("");
+  const [schemeEligibility, setSchemeEligibility] = useState("");
+  const [schemeDocuments, setSchemeDocuments] = useState("");
+  const [schemeCategories, setSchemeCategories] = useState("");
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!activeScheme) return;
-    await onCreateRule(activeScheme.id, {
-      rule_id: ruleId,
-      rule_name: ruleId.replaceAll("_", " "),
-      rule_type: "max_value",
-      condition: { field, max: Number(max) },
-      severity: "ERROR",
-      active: true,
-    });
+  const [ruleName, setRuleName] = useState("");
+  const [ruleDesc, setRuleDesc] = useState("");
+  const [ruleType, setRuleType] = useState("max_value");
+  const [ruleField, setRuleField] = useState("");
+  const [ruleValue, setRuleValue] = useState("");
+  const [severity, setSeverity] = useState<"ERROR" | "WARNING" | "INFO">("ERROR");
+
+  const scheme = schemes[selectedScheme] ?? null;
+
+  async function handleAddScheme(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const code = schemeCode.trim() || slug(schemeName);
+      await onCreateScheme({
+        code,
+        name: schemeName.trim(),
+        description: schemePurpose.trim(),
+        configuration: {
+          purpose: schemePurpose.trim(),
+          eligibility: splitLines(schemeEligibility),
+          required_documents: splitLines(schemeDocuments),
+          project_categories: splitLines(schemeCategories),
+        },
+        rules: [],
+      });
+      setSuccess(`Scheme "${schemeName}" added successfully.`);
+      setShowAddScheme(false);
+      setSchemeName("");
+      setSchemeCode("");
+      setSchemePurpose("");
+      setSchemeEligibility("");
+      setSchemeDocuments("");
+      setSchemeCategories("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create scheme.");
+    } finally {
+      setBusy(false);
+    }
   }
 
+  async function handleAddRule(e: FormEvent) {
+    e.preventDefault();
+    if (!scheme) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const condition: Record<string, unknown> = {};
+      if (ruleField) condition.field = ruleField;
+      if (ruleType === "max_value" && ruleValue) condition.max = Number(ruleValue);
+      if (ruleType === "min_value" && ruleValue) condition.min = Number(ruleValue);
+      if (ruleType === "in_set" && ruleValue) condition.allowed_values = splitLines(ruleValue);
+      if (ruleType === "required_documents" && ruleValue) condition.document_types = splitLines(ruleValue).map(item => slug(item));
+      if (ruleType === "required_field") condition.required = true;
+      if (ruleType === "boolean") condition.expected = ruleValue.trim().toLowerCase() !== "false";
+
+      await onCreateRule(scheme.id, {
+        rule_id: slug(ruleName),
+        rule_name: ruleName.trim(),
+        rule_type: ruleType,
+        condition,
+        severity,
+        active: true,
+      });
+      setSuccess(`Rule "${ruleName}" added successfully.`);
+      setShowAddRule(false);
+      setRuleName("");
+      setRuleDesc("");
+      setRuleField("");
+      setRuleValue("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create rule.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filteredRules = (scheme?.rules ?? []).filter(rule => {
+    if (!ruleSearch.trim()) return true;
+    const q = ruleSearch.toLowerCase();
+    return rule.rule_name.toLowerCase().includes(q) || rule.rule_type.toLowerCase().includes(q);
+  });
+
   return (
-    <div className="relative flex flex-col gap-3 font-sans text-[#E8EDF1] max-w-[1400px] mx-auto pb-4">
-      {/* Topographic Contour Background Layer Signature Motif */}
-      <div
-        className="pointer-events-none absolute -inset-4 z-0 overflow-hidden opacity-[0.08]"
-        aria-hidden="true"
-      >
-        <svg
-          className="h-full w-full"
-          xmlns="http://www.w3.org/2000/svg"
-          width="100%"
-          height="100%"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M 0,80 Q 250,40 500,110 T 1000,70 M 0,190 Q 300,150 600,220 T 1000,180 M 0,300 Q 200,270 500,330 T 1000,290"
-            fill="none"
-            stroke="#3DDC84"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M 0,130 Q 350,170 700,110 T 1000,190 M 0,240 Q 200,280 500,230 T 1000,280 M 0,370 Q 450,400 800,350 T 1000,420"
-            fill="none"
-            stroke="#22303A"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
-
-      {/* Governance Console Telemetry Header Strip */}
-      <div className="relative z-10 shrink-0 rounded-[10px] border border-[#22303A] bg-[#131A21] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#22303A] bg-[#0B0F14] text-[#3DDC84] shrink-0">
-            <Terminal size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-mono text-sm font-bold tracking-wider text-[#E8EDF1] uppercase truncate">
-                SCHEME RULES & RAG KNOWLEDGE GOVERNANCE CONSOLE
-              </h1>
-              <span className="font-mono text-[10px] font-semibold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-2 py-0.5 rounded-[4px] shrink-0">
-                POLICY CONSOLE
-              </span>
-            </div>
-            <p className="text-xs text-[#8B99A6] mt-0.5 truncate">
-              Directorate of Env. & Climate Change • Regulatory thresholds, validation rules & policy RAG search
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 font-mono text-xs border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 rounded-[6px] text-[#3DDC84] shrink-0">
-          <Settings2 size={14} className="text-[#3DDC84]" />
-          <span>{schemes.length} ACTIVE SCHEME(S) LOADED</span>
-        </div>
-      </div>
-
-      {/* Main 2-Column Governance Split View */}
-      <div className="relative z-10 grid gap-3 lg:grid-cols-12 lg:items-start">
-        {/* LEFT COLUMN (6 Cols): Scheme Config & Policy RAG Search */}
-        <div className="lg:col-span-6 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              1. REGULATORY SCHEME CONFIG & RAG SEARCH
-            </h2>
-            <span className="font-mono text-[10px] text-[#3DDC84]">POLICY ENGINE</span>
-          </div>
-
-          <div className="relative flex-1 min-h-0">
-            <div
-              className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-220px)]"
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(61,220,132,0.4) #22303A",
-              }}
+    <div className="max-w-[1100px] mx-auto space-y-6 animate-slide-up">
+      <PageHeader
+        title="Schemes & Rules"
+        subtitle="Manage government schemes and their eligibility rules."
+        breadcrumb="Governance"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => { setShowAddScheme(v => !v); setShowAddRule(false); }}
+              className="secondary-button"
             >
-              {/* Scheme Selector */}
-              <label className="block">
-                <span className="block font-mono text-[10px] font-bold text-[#8B99A6] uppercase tracking-wider mb-1">
-                  SELECT ACTIVE REGULATORY SCHEME
-                </span>
-                <select
-                  className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 font-mono text-xs text-[#E8EDF1] focus:outline-none focus:ring-1 focus:ring-[#3DDC84] focus:border-[#3DDC84]"
-                  value={schemeId}
-                  onChange={(e) => setSchemeId(e.target.value)}
+              <PlusCircle size={14} /> Add Scheme
+            </button>
+            <button
+              onClick={() => { setShowAddRule(v => !v); setShowAddScheme(false); }}
+              className="primary-button"
+            >
+              <PlusCircle size={14} /> Add Rule
+            </button>
+          </div>
+        }
+      />
+
+      {error && <AlertBanner variant="error" onDismiss={() => setError(null)}>{error}</AlertBanner>}
+      {success && <AlertBanner variant="success" onDismiss={() => setSuccess(null)}>{success}</AlertBanner>}
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-5">
+          {schemes.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {schemes.map((item, i) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setSelectedScheme(i); setExpandedRule(null); }}
+                  className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                    selectedScheme === i
+                      ? "border-teal-500 bg-teal-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-700"
+                  }`}
                 >
-                  <option value="">DEFAULT SCHEME</option>
-                  {schemes.map((scheme) => (
-                    <option key={scheme.id} value={scheme.id}>
-                      {scheme.name} ({scheme.code})
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          )}
 
-              {/* Active Scheme Config Card */}
-              {activeScheme && (
-                <div className="rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 space-y-3 font-mono text-xs">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-[#E8EDF1] uppercase">
-                      {activeScheme.name}
-                    </h3>
-                    <span className="font-bold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-2 py-0.5 rounded text-[10px]">
-                      {activeScheme.code}
-                    </span>
-                  </div>
-                  <p className="font-sans text-xs text-[#8B99A6]">
-                    {activeScheme.description || "Environmental funding & clearance scheme."}
-                  </p>
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#3DDC84]">
-                    <ShieldCheck size={12} className="text-[#3DDC84]" />
-                    {activeScheme.rules.length} RULE(S) CONFIGURABLE
-                  </div>
+          {showAddScheme && (
+            <FormPanel title="Add Scheme" subtitle="Create a scheme using readable fields. Rules can be added after the scheme is saved.">
+              <form onSubmit={handleAddScheme} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Scheme Name" required>
+                    <input className="form-input" value={schemeName} onChange={e => setSchemeName(e.target.value)} placeholder="Green Infrastructure Support" required />
+                  </FormField>
+                  <FormField label="Scheme Code">
+                    <input className="form-input" value={schemeCode} onChange={e => setSchemeCode(e.target.value)} placeholder="GISS_2026" />
+                  </FormField>
+                </div>
+                <FormField label="Purpose" required>
+                  <textarea className="form-input min-h-20" value={schemePurpose} onChange={e => setSchemePurpose(e.target.value)} placeholder="Support eligible green infrastructure projects." required />
+                </FormField>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <FormField label="Eligibility">
+                    <textarea className="form-input min-h-24" value={schemeEligibility} onChange={e => setSchemeEligibility(e.target.value)} placeholder="Registered NGO&#10;Municipal body" />
+                  </FormField>
+                  <FormField label="Required Documents">
+                    <textarea className="form-input min-h-24" value={schemeDocuments} onChange={e => setSchemeDocuments(e.target.value)} placeholder="Application Form&#10;Budget&#10;Certificate" />
+                  </FormField>
+                  <FormField label="Project Categories">
+                    <textarea className="form-input min-h-24" value={schemeCategories} onChange={e => setSchemeCategories(e.target.value)} placeholder="Urban Greening&#10;Water Conservation" />
+                  </FormField>
+                </div>
+                <FormActions onCancel={() => setShowAddScheme(false)} busy={busy} submitLabel="Save Scheme" />
+              </form>
+            </FormPanel>
+          )}
 
-                  {/* Human-Friendly Scheme Parameters Renderer */}
-                  <div className="pt-2 border-t border-[#22303A]">
-                    <HumanSchemeParameters
-                      config={
-                        activeScheme.configuration as Record<string, unknown>
-                      }
-                    />
-                  </div>
+          {scheme && <SchemeCard scheme={scheme} />}
+
+          {showAddRule && scheme && (
+            <FormPanel title={`Add Rule to ${scheme.name}`} subtitle="Fill in the rule details below. No JSON required.">
+              <form onSubmit={handleAddRule} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Rule Name" required>
+                    <input className="form-input" value={ruleName} onChange={e => setRuleName(e.target.value)} placeholder="Maximum Project Cost" required />
+                  </FormField>
+                  <FormField label="Rule Type" required>
+                    <select className="form-select" value={ruleType} onChange={e => setRuleType(e.target.value)}>
+                      {RULE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                <FormField label="Checks">
+                  <input className="form-input" value={ruleDesc} onChange={e => setRuleDesc(e.target.value)} placeholder="Whether the submitted value follows scheme requirements." />
+                </FormField>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <FormField label="Field to Check">
+                    <input className="form-input" value={ruleField} onChange={e => setRuleField(e.target.value)} placeholder="financial.project_cost" />
+                  </FormField>
+                  <FormField label={ruleValueLabel(ruleType)}>
+                    <input className="form-input" value={ruleValue} onChange={e => setRuleValue(e.target.value)} placeholder={ruleValuePlaceholder(ruleType)} />
+                  </FormField>
+                  <FormField label="Severity">
+                    <select className="form-select" value={severity} onChange={e => setSeverity(e.target.value as typeof severity)}>
+                      {SEVERITY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                <FormActions onCancel={() => setShowAddRule(false)} busy={busy} submitLabel="Save Rule" />
+              </form>
+            </FormPanel>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-slate-700">Rules {scheme ? `(${scheme.rules.length})` : ""}</h3>
+              {(scheme?.rules.length ?? 0) > 3 && (
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input className="form-input w-44 py-1.5 pl-7 text-xs" placeholder="Search rules..." value={ruleSearch} onChange={e => setRuleSearch(e.target.value)} />
                 </div>
               )}
-
-              {/* Interactive Policy RAG Search Section */}
-              <div className="pt-2 border-t border-[#22303A] space-y-2">
-                <div className="font-mono text-[10px] font-bold text-[#8B99A6] uppercase">
-                  ASK SCHEME KNOWLEDGE BASE (RAG QUERY)
-                </div>
-                <KnowledgeSearch initialQuery={activeScheme?.name || ""} />
-              </div>
             </div>
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#131A21] to-transparent z-10" />
-          </div>
-        </div>
 
-        {/* RIGHT COLUMN (6 Cols): Active Rules Matrix */}
-        <div className="lg:col-span-6 flex flex-col rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#22303A] px-3.5 py-2.5 bg-[#0B0F14]/60 shrink-0">
-            <h2 className="font-mono text-xs font-bold text-[#E8EDF1] uppercase tracking-wider">
-              2. ACTIVE RULES MATRIX
-            </h2>
-            <span className="font-mono text-[10px] text-[#8B99A6]">
-              RULES: {activeScheme?.rules.length || 0}
-            </span>
-          </div>
+            {filteredRules.length === 0 && !showAddRule && (
+              <EmptyState
+                title="No rules configured"
+                description={scheme ? `No eligibility rules are set for ${scheme.name}.` : "Select a scheme to view its rules."}
+                action={
+                  <button onClick={() => setShowAddRule(true)} className="primary-button">
+                    <PlusCircle size={13} /> Add first rule
+                  </button>
+                }
+              />
+            )}
 
-          <div className="relative flex-1 min-h-0">
-            <div
-              className="p-4 overflow-y-auto max-h-[calc(100vh-220px)]"
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(61,220,132,0.4) #22303A",
-              }}
-            >
-              <div className="space-y-2">
-                <div className="font-mono text-[10px] font-bold text-[#8B99A6] uppercase mb-2">
-                  ACTIVE CONFIGURABLE RULES
-                </div>
+            {filteredRules.map(rule => {
+              const { icon, label } = humanRuleType(rule.rule_type);
+              const requirement = humanCondition(rule.condition);
+              const open = expandedRule === rule.id;
+              return (
+                <div key={rule.id} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRule(open ? null : rule.id)}
+                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-slate-50"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100">{icon}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-slate-800">{rule.rule_name}</span>
+                        <Badge>{label}</Badge>
+                        <Badge tone={rule.active ? "green" : "gray"}>{rule.active ? "Active" : "Inactive"}</Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">{requirement}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {onDeleteRule && (
+                        <button
+                          onClick={async e => { e.stopPropagation(); await onDeleteRule(scheme!.id, rule.id); }}
+                          className="text-slate-300 transition hover:text-rose-500"
+                          title="Delete rule"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      {open ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                    </div>
+                  </button>
 
-                <div className="grid gap-2.5 sm:grid-cols-2 items-stretch">
-                  {activeScheme?.rules.map((rule) => {
-                    const accent = getRuleTypeAccent(rule.rule_type);
-                    return (
-                      <article
-                        key={rule.id}
-                        className={`rounded-[6px] border border-[#22303A] bg-[#0B0F14] p-3 space-y-2 font-mono text-xs ${accent.border}`}
-                      >
-                        <div className="flex items-start justify-between gap-2 border-b border-[#22303A] pb-1.5">
-                          <div className="min-w-0">
-                            <h3 className="font-bold text-[#E8EDF1] uppercase flex items-center gap-1.5 truncate">
-                              {accent.icon}
-                              <span className="truncate">{rule.rule_name}</span>
-                            </h3>
-                            <span className={`inline-block mt-1 text-[9px] font-bold border px-1.5 py-0.5 rounded uppercase ${accent.badge}`}>
-                              {rule.rule_type}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[9px] font-bold text-[#3DDC84] bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-1.5 py-0.5 rounded uppercase">
-                              {rule.active ? "ACTIVE" : "INACTIVE"}
-                            </span>
-                            {onDeleteRule && (
-                              <button
-                                type="button"
-                                onClick={() => onDeleteRule(activeScheme.id, rule.id)}
-                                className="flex h-5 w-5 items-center justify-center rounded border border-[#22303A] bg-[#0B0F14] text-[#8B99A6] hover:text-[#D9534F] hover:border-[#D9534F] transition-colors"
-                                title="Delete rule"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Human-Friendly Policy Condition Renderer */}
-                        <div className="p-2 rounded bg-[#131A21] border border-[#22303A]">
-                          <HumanRuleCondition condition={rule.condition as Record<string, unknown>} />
-                        </div>
-                      </article>
-                    );
-                  })}
-
-                  {!activeScheme?.rules.length && (
-                    <div className="py-8 text-center font-mono text-xs text-[#8B99A6] col-span-2">
-                      NO RULES CONFIGURED FOR THIS SCHEME
+                  {open && (
+                    <div className="border-t border-slate-100 px-5 pb-4 pt-3">
+                      <div className="grid gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-3">
+                        <RuleInfo label="Checks" value={ruleDescForType(rule.rule_type)} />
+                        <RuleInfo label="Requirement" value={requirement} />
+                        <RuleInfo label="Status" value={rule.active ? "Active" : "Inactive"} />
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <h3 className="text-sm font-bold text-slate-800">Policy Search</h3>
+              <p className="mt-0.5 text-xs text-slate-400">Search scheme requirements and guidelines.</p>
             </div>
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#131A21] to-transparent z-10" />
+            <div className="p-4">
+              <KnowledgeSearch />
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* FULL-WIDTH BOTTOM ROW: Provision New Scheme Rule Form */}
-      <div className="relative z-10 rounded-[10px] border border-[#22303A] bg-[#131A21] overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[#22303A] px-4 py-2.5 bg-[#0B0F14]/60 shrink-0">
-          <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#E8EDF1] uppercase">
-            <PlusCircle size={14} className="text-[#3DDC84]" />
-            <span>3. PROVISION NEW SCHEME RULE</span>
-          </div>
-          <span className="font-mono text-[10px] text-[#8B99A6]">RULE PROVISIONING PANEL</span>
-        </div>
-
-        <form onSubmit={submit} className="p-4 space-y-3 font-mono text-xs">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="block">
-              <span className="block text-[10px] font-bold text-[#8B99A6] uppercase mb-1">
-                RULE IDENTIFIER
-              </span>
-              <input
-                className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84]"
-                value={ruleId}
-                onChange={(e) => setRuleId(e.target.value)}
-                placeholder="MAX_TREE_COST"
-              />
-            </label>
-
-            <label className="block">
-              <span className="block text-[10px] font-bold text-[#8B99A6] uppercase mb-1">
-                FIELD PATH
-              </span>
-              <input
-                className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84]"
-                value={field}
-                onChange={(e) => setField(e.target.value)}
-                placeholder="financial.project_cost"
-              />
-            </label>
-
-            <label className="block">
-              <span className="block text-[10px] font-bold text-[#8B99A6] uppercase mb-1">
-                MAX THRESHOLD (₹)
-              </span>
-              <input
-                type="number"
-                className="w-full rounded-[6px] border border-[#22303A] bg-[#0B0F14] px-3 py-1.5 text-xs text-[#E8EDF1] placeholder-[#8B99A6]/40 focus:outline-none focus:ring-1 focus:ring-[#3DDC84]"
-                value={max}
-                onChange={(e) => setMax(e.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="flex justify-end pt-2 border-t border-[#22303A]">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-[6px] border border-[#3DDC84] bg-[#3DDC84] text-[#0B0F14] hover:bg-[#3DDC84]/90 focus:outline-none focus:ring-1 focus:ring-[#3DDC84] transition-colors"
-            >
-              <PlusCircle size={14} />
-              <span>PROVISION SCHEME RULE</span>
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
 }
 
-function HumanSchemeParameters({
-  config,
-}: {
-  config: Record<string, unknown> | null | undefined;
-}) {
-  const [showJson, setShowJson] = useState(false);
-
-  if (!config || Object.keys(config).length === 0) {
-    return (
-      <div className="text-[10px] text-[#8B99A6] italic font-sans">
-        No scheme parameters configured.
-      </div>
-    );
-  }
+function SchemeCard({ scheme }: { scheme: SchemeRead }) {
+  const configuration = scheme.configuration ?? {};
+  const purpose = String(configuration.purpose ?? scheme.description ?? "Purpose not provided.");
+  const eligibility = toList(configuration.eligibility);
+  const docs = toList(configuration.required_documents);
 
   return (
-    <div className="space-y-1.5 font-sans">
-      <div className="flex items-center justify-between font-mono text-[10px] text-[#8B99A6] uppercase font-bold">
-        <span>SCHEME PARAMETERS</span>
-        <button
-          type="button"
-          onClick={() => setShowJson(!showJson)}
-          className="text-[9px] text-[#3DDC84] hover:underline font-mono"
-        >
-          {showJson ? "HUMAN VIEW" : "JSON SPEC"}
-        </button>
-      </div>
-
-      {showJson ? (
-        <pre className="max-h-24 overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden text-[10px] bg-[#131A21] p-2 rounded border border-[#22303A] text-[#E8EDF1] whitespace-pre-wrap break-all font-mono">
-          {JSON.stringify(config, null, 2)}
-        </pre>
-      ) : (
-        <div className="space-y-1 bg-[#131A21] p-2 rounded border border-[#22303A]">
-          {Object.entries(config).map(([key, val]) => {
-            const label = key
-              .replaceAll("_", " ")
-              .replaceAll(".", " ")
-              .toUpperCase();
-            const valueStr =
-              typeof val === "object"
-                ? JSON.stringify(val)
-                : String(val).replaceAll("_", " ");
-
-            return (
-              <div
-                key={key}
-                className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono"
-              >
-                <span className="text-[#8B99A6] font-semibold text-[10px]">
-                  {label}:
-                </span>
-                <span className="text-[#3DDC84] font-bold capitalize">
-                  {valueStr}
-                </span>
-              </div>
-            );
-          })}
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">{scheme.name}</h2>
+          <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{scheme.code}</p>
         </div>
-      )}
+        <Badge tone={scheme.active ? "green" : "gray"}>{scheme.active ? "Active" : "Inactive"}</Badge>
+      </div>
+      <div className="grid gap-4 p-5 sm:grid-cols-3">
+        <SchemeInfo label="Purpose" value={purpose} />
+        <SchemeInfo label="Eligibility" value={eligibility.length ? eligibility.join(", ") : "Evidence unavailable"} />
+        <SchemeInfo label="Required Documents" value={docs.length ? docs.join(", ") : "Evidence unavailable"} />
+      </div>
     </div>
   );
 }
 
-function HumanRuleCondition({
-  condition,
-}: {
-  condition: Record<string, unknown>;
-}) {
-  const [showJson, setShowJson] = useState(false);
-
-  if (!condition || Object.keys(condition).length === 0) {
-    return (
-      <div className="text-[10px] text-[#8B99A6] italic font-sans">
-        No condition criteria specified.
-      </div>
-    );
-  }
-
-  // 1. Document Types Requirement
-  if (Array.isArray(condition.document_types)) {
-    const docs = condition.document_types as string[];
-    return (
-      <div className="space-y-1.5 text-[11px] font-sans">
-        <div className="flex items-center justify-between font-mono text-[9px] text-[#8B99A6] uppercase tracking-wider">
-          <span>REQUIRED DOCUMENTS</span>
-          <button
-            type="button"
-            onClick={() => setShowJson(!showJson)}
-            className="text-[9px] text-[#3DDC84] hover:underline font-mono"
-          >
-            {showJson ? "HUMAN VIEW" : "JSON SPEC"}
-          </button>
-        </div>
-        {showJson ? (
-          <pre className="text-[9px] font-mono bg-[#0B0F14] p-1.5 rounded border border-[#22303A] text-[#E8EDF1] break-all whitespace-pre-wrap">
-            {JSON.stringify(condition, null, 2)}
-          </pre>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {docs.map((d) => (
-              <span
-                key={d}
-                className="font-mono text-[9px] font-semibold px-2 py-0.5 rounded bg-[#0B0F14] border border-[#22303A] text-[#E8EDF1]"
-              >
-                {d.replaceAll("_", " ")}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 2. Field with Allowed Values
-  if (condition.field && Array.isArray(condition.allowed_values)) {
-    const fieldName =
-      String(condition.field).split(".").pop()?.replaceAll("_", " ") ??
-      String(condition.field);
-    const allowed = condition.allowed_values as string[];
-    return (
-      <div className="space-y-1.5 text-[11px] font-sans">
-        <div className="flex items-center justify-between font-mono text-[9px] text-[#8B99A6] uppercase tracking-wider">
-          <span>ELIGIBLE {fieldName.toUpperCase()}</span>
-          <button
-            type="button"
-            onClick={() => setShowJson(!showJson)}
-            className="text-[9px] text-[#3DDC84] hover:underline font-mono"
-          >
-            {showJson ? "HUMAN VIEW" : "JSON SPEC"}
-          </button>
-        </div>
-        {showJson ? (
-          <pre className="text-[9px] font-mono bg-[#0B0F14] p-1.5 rounded border border-[#22303A] text-[#E8EDF1] break-all whitespace-pre-wrap">
-            {JSON.stringify(condition, null, 2)}
-          </pre>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {allowed.map((val) => (
-              <span
-                key={val}
-                className="font-mono text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[#0B0F14] border border-[#3DDC84]/30 text-[#3DDC84]"
-              >
-                {val}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 3. Field with Max Threshold
-  if (condition.field && condition.max != null) {
-    const fieldPath = String(condition.field);
-    const maxVal = Number(condition.max);
-    const isCost =
-      fieldPath.includes("cost") ||
-      fieldPath.includes("financial") ||
-      fieldPath.includes("amount");
-    const isDuration =
-      fieldPath.includes("duration") || fieldPath.includes("month");
-
-    let formattedVal = `≤ ${maxVal}`;
-    if (isCost) {
-      const lakhs = (maxVal / 100000).toFixed(0);
-      formattedVal = `≤ ₹${maxVal.toLocaleString("en-IN")} (₹${lakhs} Lakhs Max)`;
-    } else if (isDuration) {
-      formattedVal = `≤ ${maxVal} Months (${(maxVal / 12).toFixed(1)} Yrs Max)`;
-    }
-
-    return (
-      <div className="space-y-1 text-[11px] font-sans">
-        <div className="flex items-center justify-between font-mono text-[9px] text-[#8B99A6] uppercase tracking-wider">
-          <span>
-            {isCost
-              ? "COST THRESHOLD"
-              : isDuration
-              ? "DURATION LIMIT"
-              : "MAX THRESHOLD"}
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowJson(!showJson)}
-            className="text-[9px] text-[#3DDC84] hover:underline font-mono"
-          >
-            {showJson ? "HUMAN VIEW" : "JSON SPEC"}
-          </button>
-        </div>
-        {showJson ? (
-          <pre className="text-[9px] font-mono bg-[#0B0F14] p-1.5 rounded border border-[#22303A] text-[#E8EDF1] break-all whitespace-pre-wrap">
-            {JSON.stringify(condition, null, 2)}
-          </pre>
-        ) : (
-          <div className="font-mono text-xs font-bold text-[#3DDC84] bg-[#0B0F14] p-1.5 rounded border border-[#22303A] truncate">
-            {formattedVal}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Fallback — field present without allowed_values or max (e.g. required_field, enum check)
-  const fieldName = condition.field
-    ? String(condition.field).split(".").pop()?.replaceAll("_", " ").toUpperCase() ?? String(condition.field)
-    : null;
-  const ruleTypeFallback = condition.rule_type
-    ? String(condition.rule_type).replaceAll("_", " ").toUpperCase()
-    : "POLICY CRITERIA";
-  const fieldValue = condition.value != null ? String(condition.value) : null;
-
+function FormPanel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5 text-[11px] font-sans">
-      <div className="flex items-center justify-between font-mono text-[9px] text-[#8B99A6] uppercase tracking-wider">
-        <span>{ruleTypeFallback}</span>
-        <button
-          type="button"
-          onClick={() => setShowJson(!showJson)}
-          className="text-[9px] text-[#3DDC84] hover:underline font-mono"
-        >
-          {showJson ? "HUMAN VIEW" : "JSON SPEC"}
-        </button>
+    <div className="rounded-xl border border-teal-200 bg-teal-50 shadow-sm overflow-hidden animate-slide-up">
+      <div className="border-b border-teal-200 px-5 py-4">
+        <h3 className="text-sm font-bold text-teal-800">{title}</h3>
+        <p className="mt-0.5 text-xs text-teal-600">{subtitle}</p>
       </div>
-      {showJson ? (
-        <pre className="text-[9px] font-mono bg-[#0B0F14] p-1.5 rounded border border-[#22303A] text-[#E8EDF1] break-all whitespace-pre-wrap">
-          {JSON.stringify(condition, null, 2)}
-        </pre>
-      ) : (
-        <div className="font-mono text-[10px] bg-[#0B0F14] p-1.5 rounded border border-[#22303A] space-y-0.5">
-          {fieldName && (
-            <div>
-              <span className="text-[#8B99A6]">FIELD: </span>
-              <span className="text-[#E8EDF1] font-bold">{fieldName}</span>
-            </div>
-          )}
-          {fieldValue && (
-            <div>
-              <span className="text-[#8B99A6]">REQUIRED VALUE: </span>
-              <span className="text-[#3DDC84] font-bold">{fieldValue}</span>
-            </div>
-          )}
-          {!fieldName && !fieldValue && (
-            <span className="text-[#3DDC84] font-bold">MUST BE PRESENT</span>
-          )}
-        </div>
-      )}
+      <div className="p-5">{children}</div>
     </div>
   );
+}
+
+function FormActions({ onCancel, busy, submitLabel }: { onCancel: () => void; busy: boolean; submitLabel: string }) {
+  return (
+    <div className="flex justify-end gap-3">
+      <button type="button" onClick={onCancel} className="secondary-button">Cancel</button>
+      <button type="submit" disabled={busy} className="primary-button disabled:opacity-50">{busy ? "Saving..." : submitLabel}</button>
+    </div>
+  );
+}
+
+function FormField({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+        {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function SchemeInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-sm leading-relaxed text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function RuleInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-sm font-semibold text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function Badge({ children, tone = "gray" }: { children: ReactNode; tone?: "gray" | "green" }) {
+  const cls = tone === "green" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500";
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>{children}</span>;
+}
+
+function ruleDescForType(ruleType: string): string {
+  if (ruleType === "required_documents") return "Whether required documents were submitted.";
+  if (ruleType === "required_field") return "Whether a required application field is available.";
+  if (ruleType === "in_set") return "Whether the value matches permitted scheme values.";
+  if (ruleType.includes("max")) return "Whether the value is within the permitted maximum.";
+  if (ruleType.includes("min")) return "Whether the value meets the minimum requirement.";
+  return "Whether the application follows the configured scheme requirement.";
+}
+
+function ruleValueLabel(ruleType: string): string {
+  if (ruleType === "in_set") return "Allowed Values";
+  if (ruleType === "required_documents") return "Required Documents";
+  if (ruleType === "boolean") return "Expected Value";
+  if (ruleType === "min_value") return "Minimum Value";
+  return "Maximum Value";
+}
+
+function ruleValuePlaceholder(ruleType: string): string {
+  if (ruleType === "in_set") return "Registered NGO, Municipal body";
+  if (ruleType === "required_documents") return "Application Form, Budget, Certificate";
+  if (ruleType === "boolean") return "true";
+  return "5000000";
 }

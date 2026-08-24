@@ -187,6 +187,21 @@ export default function App() {
       await refreshLists();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Rule creation failed");
+      throw err;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createScheme(payload: Record<string, unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createScheme(payload);
+      await refreshLists();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scheme creation failed");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -249,32 +264,23 @@ export default function App() {
   }
 
   return (
-    <Shell page={page} onPageChange={setPage} selectedTitle={selectedTitle} userSession={userSession} onLogout={handleLogout}>
+    <Shell page={page} onPageChange={setPage} selectedTitle={selectedTitle} userSession={userSession} onLogout={handleLogout} hasSelectedApp={!!selectedId}>
       {error && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-[8px] border border-[#D9534F]/50 bg-[#D9534F]/10 px-4 py-3 font-mono text-xs text-[#E8EDF1]">
-          <div className="flex items-start gap-2 min-w-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D9534F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-            <span className="text-[#E8EDF1] leading-relaxed">{error}</span>
-          </div>
-          <button
-            onClick={() => setError(null)}
-            className="shrink-0 text-[#8B99A6] hover:text-[#E8EDF1] transition-colors font-bold text-sm leading-none"
-            aria-label="Dismiss error"
-          >
-            ×
-          </button>
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span className="leading-relaxed font-medium">{error}</span>
+          <button onClick={() => setError(null)} className="shrink-0 font-bold text-rose-500 hover:text-rose-700 text-base leading-none" aria-label="Dismiss">×</button>
         </div>
       )}
-      {page === "dashboard" && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
-      {page === "new" && <NewApplication schemes={schemes} onCreate={createApplication} />}
+      {page === "dashboard"  && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
+      {page === "new"        && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
-      {page === "details" && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
+      {page === "details"    && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
       {page === "validation" && <ValidationVerification detail={detail} />}
-      {page === "scoring" && <ScoringExplainability detail={detail} workflow={workflow} />}
-      {page === "review" && <ReviewerWorkspace detail={detail} onDecision={submitDecision} onFeedback={submitFeedback} busy={busy} />}
-      {page === "audit" && <AuditTrail detail={detail} />}
-      {page === "schemes" && <SchemeRules schemes={schemes} onCreateRule={createRule} onDeleteRule={deleteRule} />}
-      {page === "analytics" && <Analytics analytics={analytics} />}
+      {page === "scoring"    && <ScoringExplainability detail={detail} workflow={workflow} />}
+      {page === "review"     && <ReviewerWorkspace detail={detail} workflow={workflow} onDecision={submitDecision} onFeedback={submitFeedback} busy={busy} onNavigate={(p) => setPage(p as PageKey)} />}
+      {page === "audit"      && <AuditTrail detail={detail} />}
+      {page === "schemes"    && <SchemeRules schemes={schemes} onCreateScheme={createScheme} onCreateRule={createRule} onDeleteRule={deleteRule} />}
+      {page === "analytics"  && <Analytics analytics={analytics} />}
     </Shell>
   );
 }

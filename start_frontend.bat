@@ -1,8 +1,9 @@
 @echo off
 title Frontend Server (Vite / React)
-cd /d C:\Users\vikil\Desktop\Project_Evalution\frontend
+cd /d "%~dp0frontend"
 echo ===================================================
 echo Starting Application Intelligence Frontend Server...
+echo URL: http://localhost:5173
 echo ===================================================
-npm run dev
+call npm run dev
 pause

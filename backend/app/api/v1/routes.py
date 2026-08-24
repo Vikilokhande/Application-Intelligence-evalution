@@ -374,6 +374,9 @@ def get_scheme(scheme_id: str, db: Session = Depends(get_db)) -> Scheme:
 
 @router.post("/schemes", response_model=SchemeRead, status_code=status.HTTP_201_CREATED)
 def create_scheme(payload: SchemeCreate, db: Session = Depends(get_db)) -> Scheme:
+    existing = db.scalars(select(Scheme).where(Scheme.code == payload.code)).first()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Scheme code already exists")
     scheme = Scheme(
         code=payload.code,
         name=payload.name,

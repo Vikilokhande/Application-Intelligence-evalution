@@ -111,9 +111,11 @@ Prediction Class: {prediction_class}
 Risk Score: {risk_score} / 100  (higher = more risk)
 Quality Score: {quality_score} / 100  (higher = better)
 Confidence: {confidence}
+Class Probabilities: {class_probabilities}
 Model: {model_name} v{model_version}
 Provider: {provider}
 Status: {model_status}
+Prediction Status: {prediction_status}
 
 === 13 ML FEATURE VALUES (from validated pipeline evidence) ===
 {features_summary}
@@ -187,6 +189,22 @@ def _format_features(features: dict[str, float]) -> str:
         else:
             lines.append(f"  {name}: MISSING")
     return "\n".join(lines) if lines else "No features available."
+
+
+def _format_class_probabilities(prediction: ModelPrediction) -> str:
+    raw = (prediction.feature_contributions or {}).get("_class_probabilities")
+    if not isinstance(raw, dict) or not raw:
+        return "Evidence unavailable for class probabilities."
+    parts = []
+    for key in ("LOW_RISK", "MEDIUM_RISK", "HIGH_RISK"):
+        value = raw.get(key)
+        if value is None:
+            continue
+        try:
+            parts.append(f"{key}: {float(value):.4f}")
+        except (TypeError, ValueError):
+            continue
+    return ", ".join(parts) if parts else "Evidence unavailable for class probabilities."
 
 
 def _format_validation_list(results: list[ValidationResult], status: str) -> str:
@@ -325,6 +343,11 @@ class LLMReasoningService:
         val_fail = sum(1 for r in validation_results if r.status == "FAIL")
         rule_pass = sum(1 for r in rule_results if r.result == "PASS")
         rule_fail = sum(1 for r in rule_results if r.result == "FAIL")
+        model_status = (
+            "ML_READY" if prediction.provider == "xgboost"
+            else "BASELINE_FALLBACK" if prediction.provider == "baseline"
+            else "UNAVAILABLE"
+        )
 
         prompt = REASONING_PROMPT_TEMPLATE.format(
             applicant_name=applicant_name or "Unknown",
@@ -337,10 +360,12 @@ class LLMReasoningService:
             risk_score=prediction.risk_score if prediction.risk_score is not None else "N/A",
             quality_score=prediction.quality_score if prediction.quality_score is not None else "N/A",
             confidence=f"{prediction.confidence:.2f}" if prediction.confidence else "0.00",
+            class_probabilities=_format_class_probabilities(prediction),
             model_name=prediction.model_name or "unknown",
             model_version=prediction.model_version or "unknown",
             provider=prediction.provider or "unknown",
-            model_status=prediction.status or "unknown",
+            model_status=model_status,
+            prediction_status=prediction.status or "unknown",
             features_summary=_format_features(features),
             validation_total=len(validation_results),
             validation_passed=val_pass,

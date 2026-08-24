@@ -104,6 +104,8 @@ export const api = {
   listFeedback: (applicationId: string) => request<FeedbackRead[]>(`/applications/${applicationId}/feedback`),
   analytics: () => request<AnalyticsOverview>("/analytics/overview"),
   schemes: () => request<SchemeRead[]>("/schemes"),
+  createScheme: (payload: Record<string, unknown>) =>
+    request<SchemeRead>("/schemes", { method: "POST", body: JSON.stringify(payload) }),
   createRule: (schemeId: string, payload: Record<string, unknown>) =>
     request<SchemeRule>(`/schemes/${schemeId}/rules`, { method: "POST", body: JSON.stringify(payload) }),
   deleteRule: (schemeId: string, ruleId: string) =>

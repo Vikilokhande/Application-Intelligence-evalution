@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit_service
+from app.ml.scoring import FEATURE_NAMES
 from app.models import Application, Evidence, ModelPrediction, RuleResult, ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,11 @@ class ExplainabilityService:
         # Feature contributions from actual model (sorted by absolute value)
         contributions = prediction.feature_contributions or {}
         top_contributions = sorted(
-            [(name, float(val)) for name, val in contributions.items()],
+            [
+                (name, float(contributions[name]))
+                for name in FEATURE_NAMES
+                if name in contributions and contributions[name] is not None
+            ],
             key=lambda item: abs(item[1]),
             reverse=True,
         )[:5]

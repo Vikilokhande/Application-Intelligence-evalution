@@ -3,18 +3,18 @@
 @tailwind utilities;
 
 :root {
-  color: #E8EDF1;
-  background-color: #0B0F14;
+  color: #1E293B;
+  background-color: #F8FAFC;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #0B0F14;
-  color: #E8EDF1;
+  background-color: #F8FAFC;
+  color: #1E293B;
 }
 
 /* Floating Ambient Color Orb Keyframe Animations */
@@ -135,6 +135,41 @@ body {
   animation: radarPulse 14s ease-in-out infinite;
 }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out forwards;
+}
+
+@keyframes drawerIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.animate-drawer-in {
+  animation: drawerIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-card-in {
+  animation: cardIn 0.18s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-drawer-in,
+  .animate-card-in {
+    animation: none !important;
+  }
+}
+
 @keyframes waveFlow1 {
   0%, 100% {
     transform: translateY(0px) scaleY(1);
@@ -177,14 +212,21 @@ body {
 
 
 @layer base {
-  /* Normal Active Form Controls - Dark Control Room Theme (DESIGN.md) */
-  input[type="text"],
-  input[type="number"],
-  input[type="email"],
-  input[type="search"],
-  input[type="password"],
-  select,
-  textarea {
+  /* Light-themed form controls for authenticated portal */
+  .form-input,
+  .form-select {
+    @apply block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition;
+    @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-400;
+  }
+
+  /* Legacy dark controls — only used by LandingPage / LoginPage */
+  .dark-control input[type="text"],
+  .dark-control input[type="number"],
+  .dark-control input[type="email"],
+  .dark-control input[type="search"],
+  .dark-control input[type="password"],
+  .dark-control select,
+  .dark-control textarea {
     background-color: #0B0F14;
     color: #E8EDF1;
     border: 1px solid #22303A;
@@ -197,30 +239,22 @@ body {
 
   input::placeholder,
   textarea::placeholder {
-    color: #8B99A6;
-    opacity: 0.8;
+    color: #94A3B8;
   }
 
   input:focus,
   select:focus,
   textarea:focus {
     outline: none;
-    border-color: #3DDC84;
-    box-shadow: 0 0 0 1px #3DDC84;
   }
 
   select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238B99A6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394A3B8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
     background-position: right 0.75rem center;
     background-repeat: no-repeat;
     background-size: 1.25em 1.25em;
     padding-right: 2.5rem;
     appearance: none;
-  }
-
-  option {
-    background-color: #131A21;
-    color: #E8EDF1;
   }
 }
 
