@@ -1,5 +1,5 @@
-// Light policy RAG knowledge base search component.
-
+// KnowledgeSearch.tsx — Policy Knowledge Base Search.
+// Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Slate Gray (#66717C), Soft Gray (#E5E7EB).
 import { BookOpen, FileText, Loader2, Search, Sparkles } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -20,7 +20,7 @@ export function KnowledgeSearch({ initialQuery = "" }: { initialQuery?: string }
     try {
       const data = await api.searchKnowledge(query);
       setResults(data);
-    } catch (err) {
+    } catch {
       setError("Knowledge base query returned no matching policy excerpts.");
       setResults([]);
     } finally {
@@ -29,15 +29,15 @@ export function KnowledgeSearch({ initialQuery = "" }: { initialQuery?: string }
   }
 
   return (
-    <div className="space-y-3 font-sans text-slate-700">
+    <div className="space-y-3 font-sans text-[#071A2B]">
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1 flex items-center">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#66717C] z-10" />
           <input
             type="text"
-            className="form-input pl-10 text-xs"
-            style={{ paddingLeft: "36px" }}
-            placeholder="Search environmental scheme guidelines, rules, RAG knowledge..."
+            className="form-input text-xs w-full"
+            style={{ paddingLeft: "34px" }}
+            placeholder="Search eligibility, required documents, limits…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -45,48 +45,45 @@ export function KnowledgeSearch({ initialQuery = "" }: { initialQuery?: string }
         <button
           type="submit"
           disabled={loading}
-          className="primary-button h-auto shrink-0 px-3.5 py-2 text-xs disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A243F] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d2f50] transition disabled:opacity-50 shrink-0"
         >
           {loading ? (
-            <Loader2 size={13} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin text-[#D5A51A]" />
           ) : (
-            <BookOpen size={13} />
+            <BookOpen size={13} className="text-[#D5A51A]" />
           )}
           <span>Search</span>
         </button>
       </form>
 
       {error && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-700">
+        <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-2.5 text-xs text-[#92400E]">
           {error}
         </div>
       )}
 
       {results && results.length > 0 && (
-        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-teal-700">
-            <Sparkles size={12} /> Retrieved {results.length} knowledge passage(s)
+        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#0A243F]">
+            <Sparkles size={12} className="text-[#D5A51A]" /> Retrieved {results.length} policy passage(s)
           </div>
           {results.map((item, idx) => (
             <div
               key={idx}
-              className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs space-y-1 shadow-sm"
+              className="rounded-xl border border-[#E5E7EB] bg-white p-3 text-xs space-y-1.5 shadow-2xs"
             >
-              <div className="flex items-center justify-between font-bold text-slate-800 gap-2">
+              <div className="flex items-center justify-between font-bold text-[#0A243F] gap-2">
                 <span className="truncate flex items-center gap-1.5 text-xs">
-                  <FileText size={13} className="text-teal-600 shrink-0" />
-                  {item.source || `KNOWLEDGE SOURCE #${idx + 1}`}
+                  <FileText size={13} className="text-[#0A243F] shrink-0" />
+                  {item.source || `POLICY RECORD #${idx + 1}`}
                 </span>
                 {item.score != null && (
-                  <span className="rounded border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[9px] uppercase text-teal-700">
-                    Score: {item.score.toFixed(2)}
+                  <span className="rounded-md border border-[#0A243F]/20 bg-[#0A243F]/5 px-1.5 py-0.5 text-[9px] font-bold text-[#0A243F]">
+                    Match: {(item.score * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
-              <div className="text-[9px] uppercase tracking-wide text-slate-400">
-                {item.scheme || "SCHEME"} / {item.chunk_id || "CHUNK"}
-              </div>
-              <p className="rounded border border-slate-100 bg-slate-50 p-2 font-sans text-[11px] leading-relaxed text-slate-700">
+              <p className="rounded-lg border border-[#E5E7EB] bg-[#F8F9FA] p-2.5 font-sans text-xs leading-relaxed text-[#071A2B]">
                 {item.text}
               </p>
             </div>
@@ -95,8 +92,8 @@ export function KnowledgeSearch({ initialQuery = "" }: { initialQuery?: string }
       )}
 
       {results && results.length === 0 && !error && (
-        <div className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-xs text-slate-500">
-          No matching knowledge records found for &quot;{query}&quot;
+        <div className="rounded-xl border border-dashed border-[#E5E7EB] py-4 text-center text-xs text-[#66717C]">
+          No matching records found for &quot;{query}&quot;
         </div>
       )}
     </div>

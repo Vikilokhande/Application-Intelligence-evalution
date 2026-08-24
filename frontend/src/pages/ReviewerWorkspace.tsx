@@ -1,16 +1,16 @@
-// ReviewerWorkspace.tsx — Simplified Decision Cockpit.
-// Shows status + clickable navigation cards for Evidence, Validation, AI Assessment.
-// Removes: Document Status section, Validation Summary section, AI Status section.
-// Keeps: Status row, Why this needs review, Evidence card, Validation card, AI Assessment card, Final Decision.
+// ReviewerWorkspace.tsx — Human-Readable Decision Cockpit.
+// Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
+// No backend technical jargon (no RAG, LLM, XGBoost terms). Balanced layout covering extra spaces.
 import { useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertTriangle, BarChart3, BookOpen, CheckCircle2, ClipboardList,
-  ExternalLink, MessageSquare, Sparkles, UserCheck, XCircle,
+  Copy, ExternalLink, Mail, MessageSquare, Sparkles, UserCheck,
+  ShieldCheck, FileText, ArrowRight,
 } from "lucide-react";
 import {
-  AlertBanner, EmptyState, FindingCard, PageHeader,
-  RecommendationBadge, RiskBadge, TechnicalDetails, TechRow,
+  EmptyState, PageHeader,
+  RecommendationBadge, RiskBadge,
 } from "../components/ui";
 import { StatusBadge } from "../components/StatusBadge";
 import type { ApplicationDetail, WorkflowResponse } from "../types/api";
@@ -20,28 +20,46 @@ function derivePriority(detail: ApplicationDetail): { label: string; color: stri
   const st  = (detail.status ?? "").toUpperCase();
   const rec = (detail.ai_recommendation ?? "").toUpperCase();
   const pred = detail.predictions?.[detail.predictions.length - 1];
-  if (!st.includes("AWAITING_HUMAN_REVIEW")) return { label: "—", color: "text-slate-400" };
-  if (pred?.prediction_class === "HIGH_RISK"   || rec.includes("REJECT"))        return { label: "High",   color: "text-rose-600 font-bold" };
-  if (pred?.prediction_class === "MEDIUM_RISK" || rec.includes("CLARIFICATION")) return { label: "Medium", color: "text-amber-600 font-semibold" };
-  if (pred?.prediction_class === "LOW_RISK"    || rec.includes("APPROVE"))       return { label: "Normal", color: "text-emerald-600" };
-  return { label: "—", color: "text-slate-400" };
+  if (!st.includes("AWAITING_HUMAN_REVIEW")) return { label: "—", color: "text-[#66717C]" };
+  if (pred?.prediction_class === "HIGH_RISK"   || rec.includes("REJECT"))        return { label: "High Priority",   color: "text-rose-700 font-bold" };
+  if (pred?.prediction_class === "MEDIUM_RISK" || rec.includes("CLARIFICATION")) return { label: "Medium Priority", color: "text-[#B45309] font-bold" };
+  if (pred?.prediction_class === "LOW_RISK"    || rec.includes("APPROVE"))       return { label: "Normal",          color: "text-[#0A243F] font-semibold" };
+  return { label: "—", color: "text-[#66717C]" };
 }
 
-function pct(v: number | null | undefined) { return v != null && v > 0 ? `${Math.round(v * 100)}%` : "N/A"; }
+function pct(v: number | null | undefined) { return v != null && v > 0 ? `${Math.round(v * 100)}%` : "—"; }
 
 const DECISION_OPTIONS = [
-  { value: "APPROVE",              label: "✓  Approve",              activeCls: "border-emerald-500 bg-emerald-600 text-white", cls: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" },
-  { value: "REQUEST_CLARIFICATION", label: "⚠  Request Clarification", activeCls: "border-amber-500 bg-amber-500 text-white",   cls: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" },
-  { value: "REJECT",               label: "✕  Reject",               activeCls: "border-rose-500 bg-rose-600 text-white",     cls: "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100" },
+  {
+    value: "APPROVE",
+    label: "✓  Approve Application",
+    desc: "Application meets all statutory scheme guidelines and requirements.",
+    activeCls: "border-[#0A243F] bg-[#0A243F] text-white shadow-sm",
+    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#0A243F]",
+  },
+  {
+    value: "REQUEST_CLARIFICATION",
+    label: "⚠  Request Clarification",
+    desc: "Additional documentation or parameter clarification required from applicant.",
+    activeCls: "border-[#D5A51A] bg-[#FFFBEB] text-[#92400E] border-2 shadow-sm",
+    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#D5A51A]",
+  },
+  {
+    value: "REJECT",
+    label: "✕  Reject Application",
+    desc: "Application fails mandatory environmental criteria or scheme thresholds.",
+    activeCls: "border-rose-600 bg-[#FEF2F2] text-[#991B1B] border-2 shadow-sm",
+    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-rose-300",
+  },
 ];
 
-/* ── Clickable navigation card ───────────────────────────────────── */
+/* ── Proportional Navigation Card ───────────────────────────────────── */
 function NavCard({
   icon, title, count, countLabel, summary, action, onNavigate,
 }: {
   icon: React.ReactNode;
   title: string;
-  count?: number;
+  count?: number | string;
   countLabel?: string;
   summary: string;
   action: string;
@@ -51,25 +69,29 @@ function NavCard({
     <button
       type="button"
       onClick={onNavigate}
-      className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm p-4 hover:border-teal-300 hover:shadow-md transition-all group"
+      className="w-full text-left rounded-2xl border border-[#E5E7EB] bg-white p-4 sm:p-5 shadow-xs hover:border-[#0A243F] hover:shadow-sm transition-all group"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 border border-teal-100 shrink-0 group-hover:bg-teal-100 transition">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A243F]/10 text-[#0A243F] shrink-0 group-hover:bg-[#0A243F] group-hover:text-white transition-colors">
             {icon}
           </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800">{title}</p>
-            {count != null && (
-              <p className="text-xs text-slate-500 mt-0.5">
-                <span className="font-semibold text-slate-700">{count}</span> {countLabel}
-              </p>
-            )}
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">{summary}</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-bold text-[#0A243F] truncate">{title}</p>
+              {count != null && (
+                <span className="text-[11px] font-bold text-[#0A243F] bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded-full shrink-0">
+                  {count} {countLabel}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#66717C] mt-0.5 leading-relaxed truncate max-w-md">{summary}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-teal-600 text-xs font-semibold shrink-0 mt-1 group-hover:gap-2 transition-all">
-          {action} <ExternalLink size={11} />
+
+        <div className="flex items-center gap-1.5 text-[#0A243F] text-xs font-bold shrink-0 group-hover:text-[#D5A51A] transition-colors">
+          <span>{action}</span>
+          <ArrowRight size={13} />
         </div>
       </div>
     </button>
@@ -92,12 +114,14 @@ export function ReviewerWorkspace({
   busy: boolean;
   onNavigate?: (page: string) => void;
 }) {
-  const [decision,       setDecision]       = useState("REQUEST_CLARIFICATION");
-  const [notes,          setNotes]          = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
-  const [feedbackHelpful,setFeedbackHelpful]= useState<"yes" | "no" | null>(null);
-  const [feedbackComment,setFeedbackComment]= useState("");
-  const [submitted,      setSubmitted]      = useState(false);
+  const [decision,         setDecision]         = useState("REQUEST_CLARIFICATION");
+  const [notes,            setNotes]            = useState("");
+  const [overrideReason,   setOverrideReason]   = useState("");
+  const [feedbackHelpful,  setFeedbackHelpful]  = useState<"yes" | "no" | null>(null);
+  const [feedbackComment,  setFeedbackComment]  = useState("");
+  const [submitted,        setSubmitted]        = useState(false);
+  const [showConclusion,   setShowConclusion]   = useState(false);
+  const [copied,           setCopied]           = useState(false);
 
   if (!detail) {
     return (
@@ -118,7 +142,7 @@ export function ReviewerWorkspace({
 
   const fails = detail.validation_results.filter(v => v.status === "FAIL");
   const warns = detail.validation_results.filter(v => v.status === "WARN" || v.status === "NOT_VERIFIABLE");
-  const top5  = [...fails, ...warns].slice(0, 5);
+  const topIssues  = [...fails, ...warns].slice(0, 4);
 
   const meaningfulEvidence = detail.evidence.filter(e => {
     const m = e.metadata_json as Record<string, unknown> | undefined;
@@ -156,259 +180,433 @@ export function ReviewerWorkspace({
 
   if (submitted) {
     return (
-      <div className="max-w-[600px] mx-auto mt-20 text-center space-y-5 animate-slide-up">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-          <CheckCircle2 size={32} className="text-emerald-600" />
+      <div className="max-w-[620px] mx-auto mt-16 text-center space-y-5 animate-slide-up font-sans">
+        <div className="rounded-3xl border border-[#E5E7EB] bg-white p-10 shadow-sm space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0A243F] text-[#D5A51A]">
+            <CheckCircle2 size={36} />
+          </div>
+          <h2 className="text-2xl font-extrabold text-[#0A243F]">Review Decision Recorded</h2>
+          <p className="text-[#66717C] text-sm leading-relaxed max-w-md mx-auto">
+            Your clearance decision has been saved and officially logged in the application trail.
+          </p>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900">Decision Recorded</h2>
-        <p className="text-slate-500 text-sm">Your decision has been submitted and recorded in the audit log.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto space-y-5 animate-slide-up">
+    <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
         title="Reviewer Workspace"
-        subtitle={`${detail.project_title ?? "Untitled"} — ${detail.applicant_name ?? ""}`}
+        subtitle={`${detail.project_title ?? "Clearance Application"} • ${detail.applicant_name ?? ""}`}
         breadcrumb="Case Review"
         actions={<StatusBadge value={detail.status} />}
       />
 
-      {/* ── L1: Status strip ─────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <Tile label="Status">
+      {/* ── Top Status Strip (4 Medium Proportional Cards) ─────────────────────────────────────── */}
+      <div className="grid gap-3.5 grid-cols-2 sm:grid-cols-4">
+        <Tile label="Application Status">
           <StatusBadge value={detail.status} />
         </Tile>
-        <Tile label="AI Recommendation">
+        <Tile label="Advisory Recommendation">
           <RecommendationBadge value={detail.ai_recommendation} />
         </Tile>
-        <Tile label="Risk">
+        <Tile label="Assessed Risk Level">
           <RiskBadge value={pred?.prediction_class} />
         </Tile>
-        <Tile label="Priority">
+        <Tile label="Case Review Priority">
           <span className={`text-sm font-bold ${priority.color}`}>{priority.label}</span>
         </Tile>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
+      {/* ── Main Workspace Grid (Balanced 2-Columns, No Empty Gaps) ──────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_390px] items-start">
 
-        {/* ── Left: Info + Navigation cards ───────────────────────── */}
-        <div className="space-y-5">
+        {/* ── Left Column: Primary Case Findings & Nav Cards ───────────────────────── */}
+        <div className="space-y-6">
 
-          {/* Why this needs review */}
-          {(top5.length > 0 || keyFindings.length > 0) && (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-card-in">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-                <AlertTriangle size={14} className="text-amber-500" />
-                <h2 className="text-sm font-bold text-slate-800">Why This Needs Review</h2>
-                {top5.length > 0 && (
-                  <span className="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
-                    {top5.length} issue{top5.length !== 1 ? "s" : ""}
-                  </span>
-                )}
+          {/* "Why This Needs Review" Section (Clean, User-Friendly & Human-Readable) */}
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-[#F8F9FA]">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={16} className="text-[#B45309]" />
+                <h2 className="text-sm font-bold text-[#0A243F]">Why This Case Needs Review</h2>
               </div>
-              <div className="p-4 space-y-2">
-                {top5.map((f, i) => (
-                  <FindingCard
-                    key={i}
-                    status={f.status}
-                    title={f.validation_type.replaceAll("_", " ")}
-                    message={f.message}
-                  />
-                ))}
-                {keyFindings.slice(0, top5.length === 0 ? 5 : 2).map((f, i) => (
-                  <div key={`kf-${i}`} className="flex items-start gap-2 text-sm text-slate-600 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                    <CheckCircle2 size={13} className="text-teal-500 shrink-0 mt-0.5" />
-                    {f}
-                  </div>
-                ))}
-              </div>
+              {topIssues.length > 0 && (
+                <span className="rounded-full bg-[#FFFBEB] border border-[#FDE68A] px-2.5 py-0.5 text-xs font-bold text-[#B45309]">
+                  {topIssues.length} Observation{topIssues.length > 1 ? "s" : ""}
+                </span>
+              )}
             </div>
-          )}
 
-          {/* Navigation cards */}
+            <div className="p-6 space-y-3">
+              {topIssues.length === 0 && keyFindings.length === 0 ? (
+                <div className="flex items-center gap-3 p-3.5 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA]">
+                  <CheckCircle2 size={16} className="text-[#0A243F] shrink-0" />
+                  <p className="text-xs text-[#071A2B] font-medium">
+                    All automated compliance checks have been verified. Review details and confirm decision below.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {topIssues.map((issue, i) => {
+                    const isFail = issue.status === "FAIL";
+                    return (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 p-3.5 rounded-xl border ${
+                          isFail
+                            ? "border-[#FECACA] bg-[#FEF2F2]/60 text-[#991B1B]"
+                            : "border-[#FDE68A] bg-[#FFFBEB]/60 text-[#92400E]"
+                        }`}
+                      >
+                        <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${isFail ? "text-[#DC2626]" : "text-[#D5A51A]"}`} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold">{issue.validation_type.replaceAll("_", " ")}</p>
+                          <p className="text-xs mt-0.5 leading-relaxed opacity-90">{issue.message}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {keyFindings.slice(0, 2).map((f, i) => (
+                    <div key={`kf-${i}`} className="flex items-start gap-2.5 p-3 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] text-xs text-[#071A2B]">
+                      <CheckCircle2 size={14} className="text-[#0A243F] shrink-0 mt-0.5" />
+                      <span className="font-medium leading-relaxed">{f}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Direct Navigation Cards */}
           <div className="space-y-3">
-            {/* Evidence */}
             <NavCard
-              icon={<BookOpen size={16} className="text-teal-600" />}
-              title="Scheme Evidence"
+              icon={<BookOpen size={17} />}
+              title="Scheme &amp; Policy Evidence"
               count={meaningfulEvidence.length}
-              countLabel="evidence items"
-              summary={meaningfulEvidence.length > 0
-                ? "View the scheme guidelines and evidence used to assess this application."
-                : "Evidence could not be retrieved for this application."}
-              action="View Evidence"
+              countLabel="Guidelines"
+              summary="View applicable statutory scheme guidelines and cross-referenced evidence."
+              action="Open Evidence"
               onNavigate={() => onNavigate?.("details")}
             />
 
-            {/* Validation */}
             <NavCard
-              icon={<CheckCircle2 size={16} className="text-emerald-600" />}
-              title="Validation"
+              icon={<CheckCircle2 size={17} />}
+              title="Compliance Validation"
               count={fails.length + warns.length}
-              countLabel={`issue${(fails.length + warns.length) !== 1 ? "s" : ""} found`}
-              summary={`${detail.validation_results.length} checks run — ${fails.length} failed, ${warns.length} need verification.`}
-              action="View Validation"
+              countLabel={`Issue${(fails.length + warns.length) !== 1 ? "s" : ""}`}
+              summary={`${detail.validation_results.length} total checks evaluated across applicant data and documents.`}
+              action="Open Validation"
               onNavigate={() => onNavigate?.("validation")}
             />
 
-            {/* AI Assessment */}
             <NavCard
-              icon={<BarChart3 size={16} className="text-violet-600" />}
-              title="AI Assessment"
-              count={confidence ? Math.round(confidence * 100) : undefined}
-              countLabel="% confidence"
-              summary="View risk score, key factors, and detailed AI reasoning."
-              action="View Assessment"
+              icon={<BarChart3 size={17} />}
+              title="Clearance Assessment &amp; Advisory"
+              count={confidence ? `${Math.round(confidence * 100)}%` : undefined}
+              countLabel="Confidence"
+              summary="Inspect assessed risk index, confidence metrics, and clearance recommendations."
+              action="Open Assessment"
               onNavigate={() => onNavigate?.("scoring")}
             />
           </div>
 
-          {/* AI Feedback */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+          {/* Feedback Section */}
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs overflow-hidden">
+            <div className="px-6 py-3.5 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-violet-500" />
-                <h3 className="text-xs font-bold text-slate-700">Was the AI assessment helpful?</h3>
+                <Sparkles size={14} className="text-[#D5A51A]" />
+                <h3 className="text-xs font-bold text-[#0A243F]">Was this advisory assessment helpful?</h3>
               </div>
+              <span className="text-[10px] font-semibold text-[#66717C]">Quality feedback</span>
             </div>
-            <form onSubmit={handleFeedback} className="p-4 space-y-3">
-              <div className="flex gap-2">
+            <form onSubmit={handleFeedback} className="p-5 space-y-3.5">
+              <div className="flex gap-2.5">
                 {(["yes", "no"] as const).map(v => (
-                  <button key={v} type="button" onClick={() => setFeedbackHelpful(v)}
-                    className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setFeedbackHelpful(v)}
+                    className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-colors ${
                       feedbackHelpful === v
-                        ? v === "yes" ? "border-teal-400 bg-teal-50 text-teal-700" : "border-rose-300 bg-rose-50 text-rose-700"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                    }`}>
-                    {v === "yes" ? "Yes, helpful" : "Not helpful"}
+                        ? v === "yes"
+                          ? "border-[#0A243F] bg-[#0A243F] text-white"
+                          : "border-rose-300 bg-rose-50 text-rose-800"
+                        : "border-[#E5E7EB] bg-white text-[#66717C] hover:bg-[#F8F9FA]"
+                    }`}
+                  >
+                    {v === "yes" ? "✓ Yes, helpful" : "✕ Not helpful"}
                   </button>
                 ))}
               </div>
-              <textarea rows={2}
+              <textarea
+                rows={2}
                 className="form-input resize-none text-xs"
-                placeholder="Optional comments…"
+                placeholder="Optional reviewer notes or suggestions…"
                 value={feedbackComment}
                 onChange={e => setFeedbackComment(e.target.value)}
               />
-              <button type="submit" disabled={busy || feedbackHelpful === null}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-teal-400 hover:text-teal-700 hover:bg-teal-50 transition disabled:opacity-40">
+              <button
+                type="submit"
+                disabled={busy || feedbackHelpful === null}
+                className="w-full rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] py-2 text-xs font-bold text-[#0A243F] hover:bg-[#0A243F] hover:text-white transition disabled:opacity-40"
+              >
                 Submit Feedback
               </button>
             </form>
           </div>
         </div>
 
-        {/* ── Right: Decision Form ─────────────────────────────────── */}
+        {/* ── Right Column: Decision Form ─────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Confidence pill */}
+          {/* Assessment Confidence Card */}
           {confidence && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">AI Confidence</p>
-              <p className="text-4xl font-black text-teal-600">{pct(confidence)}</p>
-              <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden mx-4">
-                <div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${confidence * 100}%` }} />
+            <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-xs text-center space-y-2">
+              <p className="text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Assessment Confidence</p>
+              <p className="text-3xl font-black text-[#0A243F] leading-none">{pct(confidence)}</p>
+              <div className="h-1.5 rounded-full bg-[#F8F9FA] border border-[#E5E7EB] overflow-hidden mx-6 mt-2">
+                <div className="h-full rounded-full bg-[#0A243F] transition-all duration-500" style={{ width: `${confidence * 100}%` }} />
               </div>
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
-              <UserCheck size={16} className="text-teal-600" />
+          {/* Decision Form Container */}
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#E5E7EB] bg-[#0A243F] text-white flex items-center gap-2.5">
+              <UserCheck size={17} className="text-[#D5A51A]" />
               <div>
-                <h2 className="text-sm font-bold text-slate-800">Final Reviewer Decision</h2>
-                <p className="text-xs text-slate-400">Recorded to audit log immediately.</p>
+                <h2 className="text-sm font-bold text-white">Final Reviewer Decision</h2>
+                <p className="text-[11px] text-slate-300">Officially logged to clearance record.</p>
               </div>
             </div>
 
-            <form onSubmit={handleDecision} className="p-5 space-y-4">
+            <form onSubmit={handleDecision} className="p-6 space-y-5">
               {detail.ai_recommendation && (
-                <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                  <span className="text-xs text-slate-500 shrink-0">AI recommends:</span>
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5">
+                  <span className="text-xs font-bold text-[#B45309]">Advisory Recommendation:</span>
                   <RecommendationBadge value={detail.ai_recommendation} />
                 </div>
               )}
 
+              {/* 3 Decision Radio Options */}
               <div className="space-y-2">
                 {DECISION_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setDecision(opt.value)}
-                    className={`w-full rounded-lg border px-4 py-3 text-sm font-bold text-left transition-all ${
+                    className={`w-full rounded-xl border p-3.5 text-left transition-all ${
                       decision === opt.value ? opt.activeCls : opt.cls
                     }`}
                   >
-                    {opt.label}
+                    <p className="text-xs font-bold leading-tight">{opt.label}</p>
+                    <p className="text-[10px] mt-1 opacity-80 leading-snug">{opt.desc}</p>
                   </button>
                 ))}
               </div>
 
+              {/* Override reason if different */}
               {isOverride && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
-                    <AlertTriangle size={12} /> Your decision differs from the AI recommendation.
+                <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3.5 space-y-2">
+                  <p className="text-xs font-bold text-[#B45309] flex items-center gap-1.5">
+                    <AlertTriangle size={13} /> Decision differs from advisory recommendation
                   </p>
-                  <textarea rows={2} required
-                    className="form-input resize-none text-sm"
-                    placeholder="Reason for your decision…"
+                  <textarea
+                    rows={2}
+                    required
+                    className="form-input resize-none text-xs"
+                    placeholder="Provide brief justification for decision…"
                     value={overrideReason}
                     onChange={e => setOverrideReason(e.target.value)}
                   />
                 </div>
               )}
 
+              {/* Reviewer Notes */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                  <MessageSquare size={12} /> Reviewer Notes
+                <label className="flex items-center gap-1.5 text-xs font-bold text-[#66717C] uppercase tracking-wider mb-1.5">
+                  <MessageSquare size={12} /> Decision Notes &amp; Conditions
                 </label>
                 <textarea
                   rows={3}
-                  className="form-input resize-none"
-                  placeholder="Conditions, clarification requests, comments…"
+                  className="form-input resize-none text-xs"
+                  placeholder="Official comments, terms, or notes attached to this application…"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                 />
               </div>
 
-              <div className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2">
-                <CheckCircle2 size={13} className="text-teal-600 shrink-0" />
-                <p className="text-xs text-teal-700 font-semibold">Human reviewer has final authority.</p>
+              {/* Officer Authority Notice */}
+              <div className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] px-3.5 py-2.5">
+                <ShieldCheck size={15} className="text-[#0A243F] shrink-0" />
+                <p className="text-xs text-[#071A2B] font-semibold">Authorised Reviewer Sign-Off</p>
               </div>
 
               <button
                 type="submit"
                 disabled={busy}
-                className={`w-full rounded-xl px-5 py-3 text-sm font-black text-white transition-all shadow-sm disabled:opacity-50 ${
-                  decision === "APPROVE"  ? "bg-emerald-600 hover:bg-emerald-700" :
-                  decision === "REJECT"   ? "bg-rose-600 hover:bg-rose-700" :
-                                            "bg-amber-500 hover:bg-amber-600"
-                }`}
+                className="w-full rounded-xl bg-[#0A243F] py-3.5 text-sm font-bold text-white hover:bg-[#0d2f50] active:scale-[0.98] transition shadow-xs disabled:opacity-50"
               >
-                {busy ? "Submitting…" : "Submit Final Decision"}
+                {busy ? "Recording Decision…" : "Submit Official Decision"}
               </button>
             </form>
           </div>
 
-          <TechnicalDetails label="Technical reference">
-            <TechRow label="Application ID" value={detail.id} />
-            <TechRow label="Status (raw)"   value={detail.status} />
-            <TechRow label="Processing"     value={detail.processing_status} />
-            <TechRow label="Last updated"   value={detail.updated_at} />
-          </TechnicalDetails>
+          {/* Send Conclusion Action Button */}
+          <button
+            type="button"
+            onClick={() => setShowConclusion(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-3 text-xs font-bold text-[#0A243F] hover:bg-[#F8F9FA] hover:border-[#0A243F] transition shadow-2xs"
+          >
+            <Mail size={14} className="text-[#D5A51A]" />
+            <span>Generate &amp; Copy Conclusion Report</span>
+          </button>
         </div>
       </div>
+
+      {/* ── Conclusion Modal ────────────────────────────────────── */}
+      {showConclusion && (
+        <ConclusionModal
+          detail={detail}
+          topIssues={topIssues}
+          keyFindings={keyFindings}
+          copied={copied}
+          onCopy={() => {
+            const text = buildConclusion(detail, topIssues, keyFindings);
+            navigator.clipboard.writeText(text).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+          onClose={() => setShowConclusion(false)}
+        />
+      )}
     </div>
   );
 }
 
-/* ── Sub-components ───────────────────────────────────────────────── */
+/* ── Status Tile ───────────────────────────────────────────────── */
 function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">{label}</p>
+    <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xs">
+      <p className="text-[11px] font-bold text-[#66717C] uppercase tracking-wider mb-1.5">{label}</p>
       {children}
+    </div>
+  );
+}
+
+/* ── buildConclusion Report ──────────────────────────────────────── */
+function buildConclusion(
+  detail: ApplicationDetail,
+  topIssues: { validation_type: string; status: string; message: string }[],
+  keyFindings: string[],
+): string {
+  const fmtDate = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
+    catch { return iso; }
+  };
+
+  const docOk     = detail.documents.filter(d => (d.processing_status ?? "").toUpperCase() === "PROCESSED" || d.extraction_status?.toUpperCase() === "EXTRACTED");
+  const docFailed = detail.documents.filter(d => { const s = (d.processing_status ?? "").toUpperCase(); return s === "FAILED" || s === "ERROR"; });
+  const fails     = topIssues.filter(v => v.status === "FAIL");
+  const warns     = topIssues.filter(v => v.status === "WARN" || v.status === "NOT_VERIFIABLE");
+
+  const rec = (detail.ai_recommendation ?? "").toUpperCase();
+  let recLabel = "Clarification Required";
+  if (rec.includes("APPROVE")) recLabel = "Approve";
+  else if (rec.includes("REJECT")) recLabel = "Reject";
+
+  const lines: string[] = [
+    `ENVIRONMENTAL CLEARANCE REVIEW CONCLUSION`,
+    `Project:    ${detail.project_title ?? "—"}`,
+    `Applicant:  ${detail.applicant_name ?? "—"}`,
+    `Date:       ${fmtDate(new Date().toISOString())}`,
+    ``,
+    `DOCUMENT SUMMARY`,
+    `  Verified: ${docOk.length} of ${detail.documents.length} document(s)`,
+  ];
+  if (docFailed.length > 0) {
+    lines.push(`  Missing/Unclear:`);
+    docFailed.forEach(d => lines.push(`    - ${d.filename}`));
+  }
+  if (fails.length > 0) {
+    lines.push(``, `CHECKLIST OBSERVATIONS`);
+    fails.forEach(f => lines.push(`  - ${f.validation_type.replaceAll("_", " ")}: ${f.message}`));
+  }
+  if (warns.length > 0) {
+    lines.push(``, `VERIFICATION ITEMS`);
+    warns.forEach(w => lines.push(`  - ${w.validation_type.replaceAll("_", " ")}: ${w.message}`));
+  }
+  if (keyFindings.length > 0) {
+    lines.push(``, `CLEARANCE FINDINGS`);
+    keyFindings.slice(0, 4).forEach(f => lines.push(`  - ${f}`));
+  }
+  lines.push(``, `ADVISORY RECOMMENDATION: ${recLabel}`);
+  lines.push(``, `AUTHORISED REVIEWER ACTION`);
+  lines.push(`Official clearance review completed and recorded.`);
+  return lines.join("\n");
+}
+
+/* ── Conclusion Modal ──────────────────────────────────────────────── */
+function ConclusionModal({
+  detail, topIssues, keyFindings, copied, onCopy, onClose,
+}: {
+  detail: ApplicationDetail;
+  topIssues: { validation_type: string; status: string; message: string }[];
+  keyFindings: string[];
+  copied: boolean;
+  onCopy: () => void;
+  onClose: () => void;
+}) {
+  const text = buildConclusion(detail, topIssues, keyFindings);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0A243F]/60 backdrop-blur-sm animate-fade-in font-sans">
+      <div className="w-full max-w-xl rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl flex flex-col max-h-[90vh] animate-slide-up overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-[#0A243F] text-white">
+          <div className="flex items-center gap-2.5">
+            <Mail size={17} className="text-[#D5A51A]" />
+            <div>
+              <p className="text-sm font-bold text-white">Clearance Review Conclusion</p>
+              <p className="text-[11px] text-slate-300">Copy text to share with applicant or attach to formal record.</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 text-slate-300 hover:bg-white/10 hover:text-white transition"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-[#F8F9FA]">
+          <pre className="whitespace-pre-wrap font-mono text-xs text-[#071A2B] leading-relaxed bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-2xs">
+            {text}
+          </pre>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-white">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-[#66717C] hover:text-[#0A243F] transition"
+          >
+            Close
+          </button>
+          <button
+            onClick={onCopy}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0A243F] px-5 py-2 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs"
+          >
+            <Copy size={13} className="text-[#D5A51A]" />
+            {copied ? "Copied to Clipboard!" : "Copy Report"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

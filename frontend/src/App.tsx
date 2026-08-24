@@ -141,7 +141,7 @@ export default function App() {
       await api.processApplication(selectedId);
       await refreshLists();
       await refreshDetail(selectedId);
-      setPage("review");
+      setPage("validation");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed");
     } finally {
@@ -157,7 +157,7 @@ export default function App() {
       await api.submitReview(selectedId, payload);
       await refreshLists();
       await refreshDetail(selectedId);
-      setPage("audit");
+      setPage("dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Decision submission failed");
     } finally {
@@ -271,10 +271,10 @@ export default function App() {
           <button onClick={() => setError(null)} className="shrink-0 font-bold text-rose-500 hover:text-rose-700 text-base leading-none" aria-label="Dismiss">×</button>
         </div>
       )}
-      {page === "dashboard"  && <Dashboard applications={applications} analytics={analytics} onSelect={selectApplication} />}
+      {page === "dashboard"  && <Dashboard applications={applications} schemes={schemes} analytics={analytics} onSelect={selectApplication} />}
       {page === "new"        && <NewApplication schemes={schemes} onCreate={createApplication} />}
       {page === "processing" && <ApplicationProcessing detail={detail} workflow={workflow} busy={busy} onProcess={processSelected} />}
-      {page === "details"    && <ApplicationDetails detail={detail} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
+      {page === "details"    && <ApplicationDetails detail={detail} schemes={schemes} onDecision={submitDecision} busy={busy} onDeleteDocument={deleteDocument} onDeleteApplication={deleteApplication} />}
       {page === "validation" && <ValidationVerification detail={detail} />}
       {page === "scoring"    && <ScoringExplainability detail={detail} workflow={workflow} />}
       {page === "review"     && <ReviewerWorkspace detail={detail} workflow={workflow} onDecision={submitDecision} onFeedback={submitFeedback} busy={busy} onNavigate={(p) => setPage(p as PageKey)} />}

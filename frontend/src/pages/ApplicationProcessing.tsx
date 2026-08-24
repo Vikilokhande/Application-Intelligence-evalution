@@ -1,90 +1,52 @@
-// ApplicationProcessing.tsx — Horizontal processing pipeline with animation.
-// Human-readable stages. No technical telemetry in primary view.
-import { useState } from "react";
+// ApplicationProcessing.tsx — Clean, Human-Readable Sequential Review Pipeline.
+// Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
+// No bright green highlights. Clean, elegant government pipeline.
+import { useState, useEffect } from "react";
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight,
-  Clock, Loader2, PlayCircle, Sparkles, XCircle,
+  Check, CheckCircle2, Loader2, PlayCircle, Sparkles,
+  ShieldCheck, ArrowRight, Layers, FileCheck, Award,
 } from "lucide-react";
-import { AlertBanner, PageHeader, TechnicalDetails, TechRow } from "../components/ui";
+import { PageHeader } from "../components/ui";
 import { StatusBadge } from "../components/StatusBadge";
 import type { ApplicationDetail, WorkflowResponse } from "../types/api";
 
-/* ── Pipeline stages ─────────────────────────────────────────────── */
+/* ── 8 Plain-Language Review Stages ───────────────────────────────── */
 interface PipelineStage {
   id: string;
+  stepNum: string;
   label: string;
+  sublabel: string;
   description: string;
-  technicalKey: string;
 }
 
 const STAGES: PipelineStage[] = [
-  { id: "received",    label: "Application Received",   description: "Application submitted and queued for review.", technicalKey: "received" },
-  { id: "documents",  label: "Documents Processed",    description: "Uploaded documents classified and extracted.", technicalKey: "document_processing" },
-  { id: "extracted",  label: "Information Extracted",  description: "Key fields and data normalised from documents.", technicalKey: "extraction" },
-  { id: "validation", label: "Validation",             description: "Application checked against scheme requirements.", technicalKey: "validation" },
-  { id: "evidence",   label: "Evidence Review",        description: "Scheme guidelines verified against application.", technicalKey: "evidence" },
-  { id: "risk",       label: "Risk Assessment",        description: "ML model evaluated application risk.", technicalKey: "scoring" },
-  { id: "ai",         label: "AI Assessment",          description: "AI generated recommendation and explanation.", technicalKey: "ai_reasoning" },
-  { id: "review",     label: "Human Review",           description: "Awaiting final decision from reviewer.", technicalKey: "human_review" },
+  { stepNum: "01", id: "intake",      label: "Application Intake",   sublabel: "Verification",      description: "Verifying applicant identity and project submission details." },
+  { stepNum: "02", id: "documents",   label: "Document Check",       sublabel: "Intake & Review",   description: "Confirming all required clearance reports and certificates are attached." },
+  { stepNum: "03", id: "extraction",  label: "Data Extraction",      sublabel: "Form Parameters",   description: "Structuring project costs, location coordinates, and timelines." },
+  { stepNum: "04", id: "eligibility", label: "Scheme Eligibility",   sublabel: "Guideline Check",   description: "Checking compliance against state scheme guidelines and criteria." },
+  { stepNum: "05", id: "policy",      label: "Policy Evidence",      sublabel: "Standards Cross-Check", description: "Cross-referencing applicable environmental regulations and norms." },
+  { stepNum: "06", id: "risk",        label: "Risk Evaluation",      sublabel: "Assessment",        description: "Evaluating compliance risk indicators and application consistency." },
+  { stepNum: "07", id: "advisory",    label: "AI Recommendation",    sublabel: "Decision Advisory", description: "Synthesizing clearance advisory findings and summary notes." },
+  { stepNum: "08", id: "clearance",   label: "Reviewer Decision",    sublabel: "Ready for Action",  description: "Prepared and routed for official reviewer review and sign-off." },
 ];
 
 type StageStatus = "completed" | "active" | "failed" | "pending";
 
-function getCurrentStageIndex(ps: string, st: string, busy: boolean): number {
-  if (st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION")) return 8; // all completed
-  if (st.includes("AWAITING_HUMAN_REVIEW") || ps.includes("AWAITING_HUMAN_REVIEW") || ps === "COMPLETED" || ps === "PROCESSED") return 7;
-  if (ps.includes("AI") || ps.includes("LLM") || ps.includes("REASON")) return 6;
-  if (ps.includes("SCOR") || ps.includes("ML") || ps.includes("FEATURE")) return 5;
-  if (ps.includes("EVIDENCE") || ps.includes("RAG")) return 4;
-  if (ps.includes("VALID")) return 3;
-  if (ps.includes("EXTRACT") || ps.includes("NORMALIZ")) return 2;
-  if (ps.includes("DOCUMENT") || ps.includes("CLASSIF") || ps.includes("OCR")) return 1;
-  if (busy) return 1; // Actively processing
-  return 0; // Not started yet, ready at step 1
+function getInitialStageIndex(ps: string, st: string): number {
+  if (st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION")) return 8;
+  if (st.includes("AWAITING_HUMAN_REVIEW") || ps.includes("AWAITING_HUMAN_REVIEW") || ps === "COMPLETED" || ps === "PROCESSED") return 8;
+  if (ps.includes("AI") || ps.includes("LLM") || ps.includes("REASON")) return 7;
+  if (ps.includes("SCOR") || ps.includes("ML") || ps.includes("FEATURE")) return 6;
+  if (ps.includes("EVIDENCE") || ps.includes("RAG")) return 5;
+  if (ps.includes("VALID")) return 4;
+  if (ps.includes("EXTRACT") || ps.includes("NORMALIZ")) return 3;
+  if (ps.includes("DOCUMENT") || ps.includes("CLASSIF") || ps.includes("OCR")) return 2;
+  return 1;
 }
 
-/* ── Status icon ─────────────────────────────────────────────────── */
-function StageIcon({ status }: { status: StageStatus }) {
-  if (status === "completed") return <CheckCircle2 size={18} className="text-emerald-500" />;
-  if (status === "active")    return <Loader2 size={18} className="text-teal-600 animate-spin" />;
-  if (status === "failed")    return <XCircle size={18} className="text-rose-500" />;
-  return <div className="h-4.5 w-4.5 rounded-full border-2 border-slate-300 bg-white" />;
-}
-
-/* ── Connector ───────────────────────────────────────────────────── */
-function Connector({ done }: { done: boolean }) {
-  return (
-    <div className={`hidden sm:block h-0.5 flex-1 min-w-[12px] transition-colors duration-500 ${done ? "bg-emerald-300" : "bg-slate-200"}`} />
-  );
-}
-
-/* ── Stage Card (vertical fallback for mobile) ───────────────────── */
-function MobileStage({ stage, status }: { stage: PipelineStage; status: StageStatus }) {
-  return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${
-      status === "active"    ? "border-teal-300 bg-teal-50" :
-      status === "completed" ? "border-emerald-200 bg-emerald-50/40" :
-      status === "failed"    ? "border-rose-200 bg-rose-50/40" :
-                               "border-slate-100 bg-white opacity-60"
-    }`}>
-      <StageIcon status={status} />
-      <div>
-        <p className={`text-sm font-semibold ${
-          status === "active"    ? "text-teal-800" :
-          status === "completed" ? "text-emerald-800" :
-          status === "failed"    ? "text-rose-800" :
-                                   "text-slate-400"
-        }`}>{stage.label}</p>
-        {status === "active" && <p className="text-xs text-teal-600 mt-0.5">{stage.description}</p>}
-      </div>
-    </div>
-  );
-}
-
-/* ── Main ────────────────────────────────────────────────────────── */
 export function ApplicationProcessing({
   detail,
-  workflow,
+  workflow: _workflow,
   busy,
   onProcess,
 }: {
@@ -93,201 +55,323 @@ export function ApplicationProcessing({
   busy: boolean;
   onProcess: () => Promise<void>;
 }) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [activeStageIdx, setActiveStageIdx] = useState<number>(0);
+
+  const ps = (detail?.processing_status ?? "NOT_STARTED").toUpperCase();
+  const st = (detail?.status ?? "").toUpperCase();
+
+  const isCompleted  = ps === "COMPLETED" || ps === "PROCESSED" || ps.includes("AWAITING") || st.includes("AWAITING") || st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION");
+  const isFailed     = ps === "FAILED" || ps === "ERROR" || st === "FAILED";
+  const isProcessing = busy || ps === "PROCESSING";
+  const canProcess   = !busy && !isCompleted;
+
+  // Travelling animation ticker during execution
+  useEffect(() => {
+    if (busy) {
+      setActiveStageIdx(0);
+      const interval = setInterval(() => {
+        setActiveStageIdx((prev) => {
+          if (prev < STAGES.length - 1) return prev + 1;
+          return prev;
+        });
+      }, 850);
+      return () => clearInterval(interval);
+    } else {
+      setActiveStageIdx(getInitialStageIndex(ps, st) - 1);
+    }
+  }, [busy, ps, st]);
 
   if (!detail) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400 animate-slide-up">
-        <PlayCircle size={40} className="text-slate-300" />
-        <p className="text-sm font-medium">Select an application to view processing status.</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-[#66717C] animate-slide-up font-sans">
+        <PlayCircle size={44} className="text-[#66717C]" />
+        <p className="text-sm font-semibold text-[#071A2B]">Select an application from the Dashboard to view processing status.</p>
       </div>
     );
   }
 
-  const ps = (detail.processing_status ?? "NOT_STARTED").toUpperCase();
-  const st = (detail.status ?? "").toUpperCase();
-
-  const isCompleted = ps === "COMPLETED" || ps === "PROCESSED" || ps.includes("AWAITING") || st.includes("AWAITING") || st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION");
-  const isFailed = ps === "FAILED" || ps === "ERROR" || st === "FAILED";
-  const isProcessing = busy || ps === "PROCESSING";
-  const canProcess = !busy && !isCompleted;
-
-  const activeStageIdx = getCurrentStageIndex(ps, st, isProcessing);
+  const currentStage = STAGES[Math.min(activeStageIdx, STAGES.length - 1)];
 
   const stageStatuses: StageStatus[] = STAGES.map((s, i) => {
-    if (isCompleted) return "completed";
+    if (isCompleted && !busy) return "completed";
     if (isFailed && i === activeStageIdx) return "failed";
     if (i < activeStageIdx) return "completed";
     if (i === activeStageIdx && isProcessing) return "active";
-    if (i === 0 && !isProcessing && !isCompleted) return "completed"; // Application received is done
+    if (i === 0 && !isProcessing && !isCompleted) return "completed";
     return "pending";
   });
 
-  const currentStage = STAGES[Math.min(activeStageIdx, STAGES.length - 1)];
-
-  // Workflow state for technical details
-  const wfState = (workflow?.state ?? {}) as Record<string, unknown>;
-
   return (
-    <div className="max-w-[1100px] mx-auto space-y-6 animate-slide-up">
+    <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
-        title="Processing"
-        subtitle={detail.project_title ?? "Application Processing"}
+        title="Processing Pipeline"
+        subtitle={detail.project_title ?? "Application Clearance Pipeline"}
         breadcrumb="Case Review"
         actions={<StatusBadge value={detail.status} />}
       />
 
-      {/* ── Ready to Process Action Card ──────────────────────────── */}
+      {/* ── Ready to Process Card ──────────────────────────── */}
       {canProcess && (
-        <div className="rounded-xl border border-teal-300 bg-gradient-to-r from-teal-50 to-emerald-50 shadow-sm p-6 text-center space-y-4">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 text-teal-700">
-            <Sparkles size={24} />
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-8 text-center shadow-xs space-y-4">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-1 text-xs font-bold text-[#B45309]">
+            <span className="h-2 w-2 rounded-full bg-[#D5A51A]" />
+            <span>READY FOR CLEARANCE PIPELINE</span>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Application Ready for Processing</h2>
-            <p className="text-sm text-slate-600 max-w-xl mx-auto mt-1">
-              Documents have been submitted. Run automated document extraction, scheme validation, policy evidence retrieval, and AI risk assessment.
+
+          <div className="space-y-1.5 max-w-xl mx-auto">
+            <h2 className="text-2xl font-extrabold text-[#0A243F] tracking-tight">
+              Start Application Verification
+            </h2>
+            <p className="text-sm text-[#66717C] leading-relaxed">
+              Verify submitted documents, check scheme eligibility guidelines, and generate clearance recommendations.
             </p>
           </div>
-          <div>
+
+          <div className="pt-2">
             <button
               onClick={onProcess}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-3.5 text-sm font-bold text-white hover:bg-teal-700 active:scale-[0.98] transition shadow-md hover:shadow-lg disabled:opacity-50"
+              className="inline-flex items-center gap-2.5 rounded-xl bg-[#D5A51A] px-8 py-3.5 font-sans text-sm font-bold text-[#071A2B] hover:bg-[#b88c14] active:scale-[0.98] transition shadow-xs disabled:opacity-50"
             >
-              {busy ? <><Loader2 size={18} className="animate-spin" /> Processing Pipeline…</> : <><PlayCircle size={18} /> Start Processing Application</>}
+              {busy ? (
+                <>
+                  <Loader2 size={18} className="animate-spin text-[#071A2B]" />
+                  <span>Processing Application…</span>
+                </>
+              ) : (
+                <>
+                  <span>Launch Review Pipeline</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Active stage call-out ─────────────────────────────────── */}
-      {isProcessing && (
-        <div className="rounded-xl border border-teal-300 bg-teal-50 shadow-sm overflow-hidden animate-slide-up">
-          <div className="flex items-center gap-4 px-6 py-5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 shrink-0">
-              <Loader2 size={22} className="text-teal-600 animate-spin" />
+      {/* ── Completed Status Banner ───────────────────────────────── */}
+      {isCompleted && !busy && (
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 flex items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A243F] text-white shrink-0">
+              <Check size={18} strokeWidth={3} />
             </div>
             <div>
-              <p className="text-xs font-bold text-teal-500 uppercase tracking-wide mb-0.5">Currently Processing</p>
-              <p className="text-base font-bold text-teal-900">{currentStage.label}</p>
-              <p className="text-sm text-teal-700 mt-0.5">
-                Executing automated extraction, validation rules, RAG evidence retrieval, and AI assessment...
+              <p className="text-sm font-bold tracking-wide text-[#0A243F]">
+                Verification Pipeline Completed
+              </p>
+              <p className="text-xs text-[#66717C] mt-0.5">
+                All checks completed. Application is ready for final reviewer decision.
               </p>
             </div>
           </div>
-          <div className="px-6 pb-4">
-            <div className="h-1.5 w-full rounded-full bg-teal-200 overflow-hidden">
-              <div
-                className="h-full bg-teal-500 rounded-full animate-pulse"
-                style={{ width: `${Math.max(((activeStageIdx + 1) / STAGES.length) * 100, 25)}%` }}
-              />
-            </div>
-            <p className="text-xs text-teal-500 mt-1.5">Processing pipeline running...</p>
-          </div>
+          <span className="font-sans text-xs font-bold text-[#0A243F] border border-[#0A243F]/20 bg-[#0A243F]/5 px-3.5 py-1.5 rounded-xl shrink-0">
+            VERIFIED
+          </span>
         </div>
       )}
 
-      {/* ── Pipeline (desktop horizontal) ─────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 hidden sm:block">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-5">Processing Pipeline</p>
+      {/* ── Sequential Processing Pipeline Card ─────────────────────────── */}
+      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-6 lg:p-8 shadow-xs space-y-8">
+        {/* Header Strip */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#0A243F]/10 text-[#0A243F]">
+              <Layers size={16} />
+            </div>
+            <div>
+              <h2 className="font-sans text-sm font-bold tracking-wide text-[#0A243F]">
+                Sequential Verification Pipeline
+              </h2>
+              <p className="font-sans text-[11px] text-[#66717C]">8-Stage Continuous Review Workflow</p>
+            </div>
+          </div>
 
-        {/* Nodes */}
-        <div className="flex items-center gap-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#FDE68A] bg-[#FFFBEB] px-3 py-1 text-[11px] font-semibold text-[#B45309]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#D5A51A]" />
+            <span>STANDARDIZED GOVERNMENT WORKFLOW</span>
+          </div>
+        </div>
+
+        {/* Desktop Pipeline Visual Track */}
+        <div className="hidden lg:flex items-start justify-between relative pt-2 pb-4">
+          {STAGES.map((stage, i) => {
+            const status = stageStatuses[i];
+            const isLast = i === STAGES.length - 1;
+
+            return (
+              <div key={stage.id} className="flex-1 flex flex-col items-center relative group">
+                {/* Connecting Track Line */}
+                {!isLast && (
+                  <div
+                    className={`absolute top-5 left-1/2 w-full h-[3px] -z-0 transition-all duration-700 ${
+                      status === "completed"
+                        ? "bg-[#0A243F]"
+                        : status === "active"
+                        ? "bg-gradient-to-r from-[#0A243F] via-[#D5A51A] to-[#E5E7EB] animate-pulse"
+                        : "bg-[#E5E7EB]"
+                    }`}
+                  />
+                )}
+
+                {/* Circular Stage Node */}
+                <div
+                  className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                    status === "completed"
+                      ? "border-[#0A243F] bg-[#0A243F] text-white shadow-xs"
+                      : status === "active"
+                      ? "border-[#D5A51A] bg-[#0A243F] text-[#D5A51A] shadow-md ring-4 ring-[#D5A51A]/30 scale-110"
+                      : status === "failed"
+                      ? "border-rose-500 bg-rose-50 text-rose-700"
+                      : "border-[#E5E7EB] bg-[#F8F9FA] text-[#66717C]"
+                  }`}
+                >
+                  {status === "completed" ? (
+                    <Check size={16} strokeWidth={3} />
+                  ) : status === "active" ? (
+                    <Loader2 size={16} className="animate-spin text-[#D5A51A]" />
+                  ) : (
+                    <span className="font-mono text-xs font-bold">{stage.stepNum}</span>
+                  )}
+                </div>
+
+                {/* Stage Titles & Subtext */}
+                <div className="text-center mt-3 px-1 max-w-[125px]">
+                  <p className="font-mono text-[9px] font-bold text-[#66717C] uppercase tracking-wider">
+                    STEP {stage.stepNum}
+                  </p>
+                  <p
+                    className={`font-sans text-xs font-bold leading-tight mt-0.5 ${
+                      status === "active"
+                        ? "text-[#0A243F]"
+                        : status === "completed"
+                        ? "text-[#0A243F]"
+                        : "text-[#66717C]"
+                    }`}
+                  >
+                    {stage.label}
+                  </p>
+                  <p className="font-sans text-[10px] text-[#66717C] mt-0.5 leading-snug">
+                    {stage.sublabel}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Mobile / Tablet Responsive Pipeline */}
+        <div className="lg:hidden space-y-2.5">
           {STAGES.map((stage, i) => {
             const status = stageStatuses[i];
             return (
-              <div key={stage.id} className="flex items-center flex-1 min-w-0">
-                {/* Stage node */}
-                <div className="flex flex-col items-center gap-1.5 flex-1">
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${
-                    status === "completed" ? "border-emerald-400 bg-emerald-50 text-emerald-600" :
-                    status === "active"    ? "border-teal-500 bg-teal-50 shadow-md shadow-teal-100 text-teal-600" :
-                    status === "failed"    ? "border-rose-400 bg-rose-50 text-rose-600" :
-                                            "border-slate-200 bg-slate-50 text-slate-400"
-                  }`}>
-                    <StageIcon status={status} />
-                  </div>
-                  <span className={`text-center text-[10px] leading-tight font-semibold ${
-                    status === "active"    ? "text-teal-700" :
-                    status === "completed" ? "text-emerald-700" :
-                    status === "failed"    ? "text-rose-700" :
-                                            "text-slate-400"
-                  }`} style={{ maxWidth: 72 }}>{stage.label}</span>
+              <div
+                key={stage.id}
+                className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all ${
+                  status === "active"
+                    ? "border-[#0A243F] bg-[#0A243F] text-white"
+                    : status === "completed"
+                    ? "border-[#E5E7EB] bg-[#F8F9FA] text-[#071A2B]"
+                    : "border-[#E5E7EB] bg-white text-[#66717C]"
+                }`}
+              >
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full font-mono font-bold text-xs shrink-0 ${
+                    status === "active"
+                      ? "bg-[#D5A51A] text-[#071A2B]"
+                      : status === "completed"
+                      ? "bg-[#0A243F] text-white"
+                      : "bg-[#F8F9FA] text-[#66717C]"
+                  }`}
+                >
+                  {status === "completed" ? <Check size={14} strokeWidth={3} /> : status === "active" ? <Loader2 size={14} className="animate-spin" /> : stage.stepNum}
                 </div>
-                {i < STAGES.length - 1 && <Connector done={stageStatuses[i] === "completed"} />}
+                <div className="min-w-0">
+                  <p className="font-sans text-xs font-bold leading-tight">{stage.label}</p>
+                  <p className={`text-[10px] ${status === "active" ? "text-[#E5E7EB]" : "text-[#66717C]"}`}>{stage.description}</p>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* ── Pipeline (mobile vertical) ────────────────────────────── */}
-      <div className="sm:hidden space-y-2">
-        {STAGES.map((stage, i) => (
-          <MobileStage key={stage.id} stage={stage} status={stageStatuses[i]} />
-        ))}
-      </div>
-
-      {/* ── Stage descriptions ────────────────────────────────────── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {STAGES.map((stage, i) => {
-          const status = stageStatuses[i];
-          return (
-            <div key={stage.id} className={`rounded-lg border p-3.5 transition-all animate-card-in ${
-              status === "completed" ? "border-emerald-200 bg-emerald-50/40" :
-              status === "active"    ? "border-teal-300 bg-teal-50" :
-              status === "failed"    ? "border-rose-200 bg-rose-50/40" :
-                                       "border-slate-100 bg-slate-50/40 opacity-70"
-            }`} style={{ animationDelay: `${i * 30}ms` }}>
-              <div className="flex items-center gap-2 mb-1">
-                <StageIcon status={status} />
-                <p className={`text-xs font-bold ${
-                  status === "completed" ? "text-emerald-700" :
-                  status === "active"    ? "text-teal-700" :
-                  status === "failed"    ? "text-rose-700" :
-                                           "text-slate-500"
-                }`}>{stage.label}</p>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">{stage.description}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Technical processing details (collapsed) ─────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowDetails(v => !v)}
-          className="flex w-full items-center justify-between px-5 py-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+      {/* ── Focused Fullscreen Blur Modal During Pipeline Execution ─────────────────────────────── */}
+      {isProcessing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in"
+          style={{
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            backgroundColor: "rgba(10, 36, 63, 0.70)",
+          }}
         >
-          <div className="flex items-center gap-2">
-            <Clock size={15} className="text-slate-400" />
-            <span>View Processing Details</span>
-          </div>
-          {showDetails ? <ChevronDown size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
-        </button>
-        {showDetails && (
-          <div className="border-t border-slate-100 p-5 space-y-4">
-            <TechnicalDetails label="Processing status">
-              <TechRow label="Status (raw)"       value={ps} />
-              <TechRow label="Application status" value={detail.status} />
-              <TechRow label="Created"            value={detail.created_at} />
-              <TechRow label="Last updated"       value={detail.updated_at} />
-            </TechnicalDetails>
-            {workflow && (
-              <TechnicalDetails label="Workflow state">
-                <TechRow label="Graph available" value={String(workflow.graph_available)} />
-                <TechRow label="Nodes"           value={workflow.nodes?.join(", ")} />
-                {Object.entries(wfState).slice(0, 12).map(([k, v]) => (
-                  <TechRow key={k} label={k} value={typeof v === "object" ? JSON.stringify(v).slice(0, 80) : String(v)} />
+          <div className="w-full max-w-lg rounded-2xl border border-white/20 bg-white shadow-2xl overflow-hidden animate-slide-up">
+            {/* Modal Header in Deep Navy */}
+            <div className="bg-[#0A243F] p-6 text-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#D5A51A]/40 bg-[#D5A51A]/20 px-3 py-1 text-xs font-bold text-[#D5A51A]">
+                  <Sparkles size={13} />
+                  <span>STEP {currentStage.stepNum} OF 08 · EXECUTING</span>
+                </div>
+                <Loader2 size={18} className="animate-spin text-[#D5A51A]" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-extrabold text-white leading-tight">
+                  {currentStage.label}
+                </h3>
+                <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                  {currentStage.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Body: Travelling Progress Bar & Pulse */}
+            <div className="p-6 bg-[#F8F9FA] space-y-5">
+              {/* Progress track */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-bold text-[#66717C]">
+                  <span>Verification Progress</span>
+                  <span className="text-[#0A243F] font-black font-mono">
+                    {Math.round(((activeStageIdx + 1) / STAGES.length) * 100)}%
+                  </span>
+                </div>
+                <div className="h-2.5 w-full rounded-full bg-[#E5E7EB] overflow-hidden p-0.5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#0A243F] via-[#D5A51A] to-[#0A243F] transition-all duration-700 shadow-2xs"
+                    style={{ width: `${Math.max(((activeStageIdx + 1) / STAGES.length) * 100, 14)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Travelling Mini Stage Dots */}
+              <div className="grid grid-cols-8 gap-1.5">
+                {STAGES.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                      i < activeStageIdx
+                        ? "bg-[#0A243F]"
+                        : i === activeStageIdx
+                        ? "bg-[#D5A51A] animate-pulse scale-y-125"
+                        : "bg-[#E5E7EB]"
+                    }`}
+                  />
                 ))}
-              </TechnicalDetails>
-            )}
+              </div>
+
+              <div className="rounded-xl border border-[#E5E7EB] bg-white p-3 flex items-center justify-between text-xs text-[#66717C]">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <ShieldCheck size={14} className="text-[#0A243F]" />
+                  Automated Clearance Check
+                </span>
+                <span className="font-semibold text-[#0A243F]">Redirecting to Validation</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

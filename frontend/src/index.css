@@ -144,6 +144,15 @@ body {
   animation: slideUp 0.2s ease-out forwards;
 }
 
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeInScale 0.18s ease-out forwards;
+}
+
 @keyframes drawerIn {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
@@ -164,6 +173,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-up,
+  .animate-fade-in,
   .animate-drawer-in,
   .animate-card-in {
     animation: none !important;

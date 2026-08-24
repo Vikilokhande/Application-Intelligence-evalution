@@ -1,38 +1,54 @@
-// Analytics.tsx — Business analytics only. No System Diagnostics.
-import { BarChart3, CheckCircle2, ClipboardList, Clock, TrendingUp } from "lucide-react";
-import { MetricCard, PageHeader } from "../components/ui";
+// Analytics.tsx — Clearance Review Analytics.
+// Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C), Soft Gray (#E5E7EB).
+// Medium horizontal KPI cards. Clean Navy/Gold visual charts. Tight, intentional spacing with no excess vertical scroll.
+import { BarChart3, CheckCircle2, ClipboardList, Clock, TrendingUp, ShieldCheck, Activity } from "lucide-react";
+import { PageHeader } from "../components/ui";
 import type { AnalyticsOverview } from "../types/api";
 
-function BarRow({ label, value, max }: { label: string; value: number; max: number }) {
+function BarRow({ label, value, max, isTop }: { label: string; value: number; max: number; isTop?: boolean }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="flex items-center gap-3 py-1.5 border-b border-slate-50 last:border-0">
-      <span className="text-xs text-slate-600 w-44 shrink-0 truncate">{label.replaceAll("_", " ")}</span>
-      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${pct}%` }} />
+    <div className="flex items-center gap-3 py-2 border-b border-[#E5E7EB] last:border-0">
+      <span className="text-xs font-semibold text-[#071A2B] w-48 shrink-0 truncate">
+        {label.replaceAll("_", " ")}
+      </span>
+      <div className="flex-1 h-2 rounded-full bg-[#F8F9FA] border border-[#E5E7EB] overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            isTop ? "bg-[#D5A51A]" : "bg-[#0A243F]"
+          }`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
-      <span className="text-xs font-bold text-slate-700 w-8 text-right">{value}</span>
+      <span className="text-xs font-mono font-bold text-[#0A243F] w-8 text-right shrink-0">
+        {value}
+      </span>
     </div>
   );
 }
 
-function ChartCard({ title, data }: { title: string; data: Record<string, number> }) {
-  const entries = Object.entries(data ?? {}).filter(([, v]) => v > 0).slice(0, 10);
+function ChartCard({ title, data, icon }: { title: string; data?: Record<string, number>; icon?: React.ReactNode }) {
+  const entries = Object.entries(data ?? {}).filter(([, v]) => v > 0).slice(0, 8);
   const max = Math.max(...entries.map(([, v]) => v), 1);
   if (entries.length === 0) return null;
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+    <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs overflow-hidden font-sans">
+      <div className="px-5 py-3.5 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-xs font-bold text-[#0A243F] uppercase tracking-wider">{title}</h3>
+        </div>
+        <span className="text-[10px] font-bold text-[#66717C] uppercase">{entries.length} Metrics</span>
       </div>
-      <div className="px-5 py-3">
-        {entries.map(([k, v]) => <BarRow key={k} label={k} value={v} max={max} />)}
+      <div className="p-5 space-y-0.5">
+        {entries.map(([k, v], idx) => (
+          <BarRow key={k} label={k} value={v} max={max} isTop={idx === 0} />
+        ))}
       </div>
     </div>
   );
 }
-
-type Tab = "status" | "documents" | "reviewers";
 
 export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }) {
   const total     = analytics?.total_applications ?? 0;
@@ -46,41 +62,101 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
     (analytics.decision_distribution?.REJECTED ?? 0)
   ) : 0;
 
+  const avgHours = analytics?.average_processing_time_hours != null
+    ? `${analytics.average_processing_time_hours.toFixed(1)}h`
+    : "—";
+
   return (
-    <div className="max-w-[1100px] mx-auto space-y-6 animate-slide-up">
+    <div className="max-w-[1200px] mx-auto space-y-5 animate-slide-up font-sans">
       <PageHeader
-        title="Analytics"
-        subtitle="Application review performance and outcomes."
+        title="Analytics &amp; Performance"
+        subtitle="Operational metrics, review outcomes, and scheme throughput."
         breadcrumb="System"
       />
 
-      {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Total Applications"  value={total}     icon={<ClipboardList size={20} />} accent="blue" />
-        <MetricCard label="Pending Review"      value={pending}   icon={<Clock size={20} />}         accent="amber" />
-        <MetricCard
-          label="Avg Processing Time"
-          value={analytics?.average_processing_time_hours != null
-            ? `${analytics.average_processing_time_hours.toFixed(1)}h`
-            : "N/A"}
-          icon={<TrendingUp size={20} />}
-          accent="default"
-        />
-        <MetricCard label="Completed Decisions" value={completed} icon={<CheckCircle2 size={20} />}  accent="green" />
+      {/* ── Medium-Sized Proportional Horizontal KPI Row ───────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xs flex items-center gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A243F]/10 text-[#0A243F] shrink-0">
+            <ClipboardList size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Total Applications</p>
+            <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{total}</p>
+            <p className="text-[10px] text-[#66717C] truncate">Cumulative submissions</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#FDE68A] bg-[#FFFBEB] p-4 shadow-xs flex items-center gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D5A51A]/20 text-[#B45309] shrink-0">
+            <Clock size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#B45309]">Pending Review</p>
+            <p className="text-2xl font-black text-[#92400E] leading-tight mt-0.5">{pending}</p>
+            <p className="text-[10px] text-[#B45309] truncate">Awaiting officer decision</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xs flex items-center gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A243F]/10 text-[#0A243F] shrink-0">
+            <TrendingUp size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Avg Review Time</p>
+            <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{avgHours}</p>
+            <p className="text-[10px] text-[#66717C] truncate">Submission to clearance</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xs flex items-center gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A243F]/10 text-[#0A243F] shrink-0">
+            <CheckCircle2 size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Completed Clearances</p>
+            <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{completed}</p>
+            <p className="text-[10px] text-[#66717C] truncate">Clearance decisions logged</p>
+          </div>
+        </div>
       </div>
 
-      {/* Charts grid */}
+      {/* ── Charts Grid (Navy & Mustard Gold Visual Identity) ─────────────────────────── */}
       {analytics ? (
-        <div className="grid gap-5 md:grid-cols-2">
-          <ChartCard title="Application Status"   data={analytics.applications_by_status} />
-          <ChartCard title="Review Outcomes"      data={analytics.decision_distribution} />
-          <ChartCard title="Risk Distribution"    data={analytics.risk_distribution} />
-          <ChartCard title="Validation Issues"    data={analytics.validation_failure_frequency} />
-          <ChartCard title="Processing by Scheme" data={analytics.scheme_statistics} />
-          <ChartCard title="Reviewer Workload"    data={analytics.reviewer_workload} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <ChartCard
+            title="Application Status Distribution"
+            data={analytics.applications_by_status}
+            icon={<Activity size={15} className="text-[#0A243F]" />}
+          />
+          <ChartCard
+            title="Review Decisions Breakdown"
+            data={analytics.decision_distribution}
+            icon={<ShieldCheck size={15} className="text-[#0A243F]" />}
+          />
+          <ChartCard
+            title="Risk Classification Index"
+            data={analytics.risk_distribution}
+            icon={<TrendingUp size={15} className="text-[#0A243F]" />}
+          />
+          <ChartCard
+            title="Validation Checklist Observations"
+            data={analytics.validation_failure_frequency}
+            icon={<CheckCircle2 size={15} className="text-[#0A243F]" />}
+          />
+          <ChartCard
+            title="Processing Volume by Scheme"
+            data={analytics.scheme_statistics}
+            icon={<BarChart3 size={15} className="text-[#0A243F]" />}
+          />
+          <ChartCard
+            title="Reviewer Caseload Workload"
+            data={analytics.reviewer_workload}
+            icon={<ClipboardList size={15} className="text-[#0A243F]" />}
+          />
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-400 text-sm">
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-10 text-center text-[#66717C] text-sm">
           Analytics data is loading…
         </div>
       )}

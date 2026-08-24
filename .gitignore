@@ -24,4 +24,5 @@ data/startup_probe/
 *.db-wal
 *.db-shm
 *.log
-Application-Intelligence-evalution/
+data/audit_chroma/
+data/audit_uploads/
