@@ -1,5 +1,4 @@
-// Structural Idea: A side-by-side comparative decision framework pairing manual paperwork friction against automated DECC Control Room verification around a central "VS" focal point.
-
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -24,6 +23,29 @@ interface LandingPageProps {
 
 export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
   const { t } = useTranslation();
+  const [activeVideo, setActiveVideo] = useState<"before" | "after">("before");
+  const beforeVideoRef = useRef<HTMLVideoElement>(null);
+  const afterVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (activeVideo === "before") {
+      if (afterVideoRef.current) {
+        afterVideoRef.current.pause();
+      }
+      if (beforeVideoRef.current) {
+        beforeVideoRef.current.currentTime = 0;
+        beforeVideoRef.current.play().catch(() => {});
+      }
+    } else {
+      if (beforeVideoRef.current) {
+        beforeVideoRef.current.pause();
+      }
+      if (afterVideoRef.current) {
+        afterVideoRef.current.currentTime = 0;
+        afterVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [activeVideo]);
 
   function scrollToHowItWorks() {
     const el = document.getElementById("how-it-works");
@@ -136,12 +158,21 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 </span>
               </div>
 
-              {/* Full Image Banner with Smooth Shaded Borders */}
-              <div className="relative overflow-hidden rounded-[8px] border border-[#CBD5E1] bg-[#F8FAFC] shadow-2xs group">
-                <img
-                  src="/assets/before_paperwork.png"
-                  alt="Manual document paperwork backlog with clock"
-                  className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103"
+              {/* Full Video Banner with Smooth Shaded Borders */}
+              <div
+                onClick={() => setActiveVideo("before")}
+                className="relative overflow-hidden rounded-[8px] border border-[#CBD5E1] bg-[#F8FAFC] shadow-2xs group cursor-pointer"
+              >
+                <video
+                  ref={beforeVideoRef}
+                  src="/assets/before_paperwork.mp4"
+                  poster="/assets/before_paperwork.png"
+                  aria-label="Manual document paperwork backlog video"
+                  muted
+                  playsInline
+                  preload="auto"
+                  onEnded={() => setActiveVideo("after")}
+                  className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103 block"
                 />
                 <div className="absolute inset-0 shadow-[inset_0_0_16px_rgba(0,0,0,0.2)] rounded-[8px] pointer-events-none" />
                 <div className="absolute inset-0 ring-1 ring-black/10 rounded-[8px] pointer-events-none" />
@@ -194,12 +225,21 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 </span>
               </div>
 
-              {/* Full Image Banner with Smooth Shaded Borders */}
-              <div className="relative overflow-hidden rounded-[8px] border border-[#0A2540]/30 bg-[#F8FAFC] shadow-2xs group">
-                <img
-                  src="/assets/after_digital.png"
-                  alt="Digital DECC Control Room verification workspace"
-                  className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103"
+              {/* Full Video Banner with Smooth Shaded Borders */}
+              <div
+                onClick={() => setActiveVideo("after")}
+                className="relative overflow-hidden rounded-[8px] border border-[#0A2540]/30 bg-[#F8FAFC] shadow-2xs group cursor-pointer"
+              >
+                <video
+                  ref={afterVideoRef}
+                  src="/assets/after_digital.mp4"
+                  poster="/assets/after_digital.png"
+                  aria-label="Digital DECC Control Room verification workspace video"
+                  muted
+                  playsInline
+                  preload="auto"
+                  onEnded={() => setActiveVideo("before")}
+                  className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103 block"
                 />
                 <div className="absolute inset-0 shadow-[inset_0_0_16px_rgba(10,37,64,0.2)] rounded-[8px] pointer-events-none" />
                 <div className="absolute inset-0 ring-1 ring-[#0A2540]/15 rounded-[8px] pointer-events-none" />
