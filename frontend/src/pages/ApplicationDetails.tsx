@@ -6,8 +6,9 @@ import {
   AlertTriangle, CheckCircle2, FileText, FolderOpen,
   Trash2, XCircle, HelpCircle, ShieldCheck, Clock,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
-  EvidenceCard, FindingCard, PageHeader, RiskBadge,
+  EvidenceCard, PageHeader, RiskBadge,
   RecommendationBadge, EmptyState,
 } from "../components/ui";
 import { StatusBadge } from "../components/StatusBadge";
@@ -75,14 +76,6 @@ function fmtCurrency(v: unknown): string {
 
 type Tab = "overview" | "documents" | "validation" | "evidence" | "rules";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "overview",   label: "Overview"   },
-  { key: "documents",  label: "Documents"  },
-  { key: "validation", label: "Validation" },
-  { key: "evidence",   label: "Evidence"   },
-  { key: "rules",      label: "Rules"      },
-];
-
 export function ApplicationDetails({
   detail,
   schemes = [],
@@ -98,8 +91,17 @@ export function ApplicationDetails({
   onDeleteDocument: (id: string) => Promise<void>;
   onDeleteApplication: (id: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("overview");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "overview",   label: t("details.tab_overview", "Overview")     },
+    { key: "documents",  label: t("details.tab_documents", "Documents")   },
+    { key: "validation", label: t("details.tab_validation", "Validation") },
+    { key: "evidence",   label: t("details.tab_evidence", "Evidence")     },
+    { key: "rules",      label: t("details.tab_rules", "Scheme Rules")    },
+  ];
 
   // Scheme ID → human readable name lookup
   const schemeMap = new Map(schemes.map(s => [s.id, s.name]));
@@ -112,8 +114,8 @@ export function ApplicationDetails({
     return (
       <EmptyState
         icon={<FolderOpen size={24} />}
-        title="No application selected"
-        description="Select an application from the Dashboard to view details."
+        title={t("audit.empty_title", "No application selected")}
+        description={t("audit.empty_desc", "Select an application from the Dashboard to view details.")}
       />
     );
   }
@@ -135,31 +137,31 @@ export function ApplicationDetails({
   });
 
   const summaryFields = [
-    { label: "Applicant Name", value: detail.applicant_name },
-    { label: "Organisation",   value: formData?.organization_name as string },
-    { label: "Applied Scheme", value: schemeName(detail.scheme_id), isScheme: true },
-    { label: "Project Title",  value: detail.project_title },
-    { label: "Category",       value: detail.project_category },
-    { label: "Location",       value: formData?.project_location as string },
-    { label: "Estimated Cost", value: fmtCurrency(formData?.project_cost) },
-    { label: "Duration",       value: formData?.project_duration ? `${formData.project_duration} months` : null },
+    { label: t("details.applicant_name", "Applicant Name"), value: detail.applicant_name },
+    { label: t("details.organization", "Organisation"),   value: formData?.organization_name as string },
+    { label: t("details.scheme", "Applied Scheme"), value: schemeName(detail.scheme_id), isScheme: true },
+    { label: t("details.project_title", "Project Title"),  value: detail.project_title },
+    { label: t("details.project_cat", "Category"),       value: detail.project_category },
+    { label: t("details.location", "Location"),       value: formData?.project_location as string },
+    { label: t("details.cost", "Estimated Cost"), value: fmtCurrency(formData?.project_cost) },
+    { label: t("details.duration", "Duration"),       value: formData?.project_duration ? `${formData.project_duration} ${t("details.duration", "Months")}` : null },
   ];
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
-        title="Application Review"
+        title={t("details.title", "Application Case Details")}
         subtitle={`${detail.project_title ?? "Untitled Application"} • ${detail.applicant_name ?? ""}`}
-        breadcrumb="Applications"
+        breadcrumb={t("nav.applications", "Applications")}
         actions={<StatusBadge value={detail.status} />}
       />
 
-      {/* ── Top KPI Status Cards (Matches Landing & Login Page Cards) ────────────────────────────── */}
+      {/* ── Top KPI Status Cards ────────────────────────────── */}
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <Clock size={12} className="text-slate-400" />
-            Current Status
+            {t("details.overall_status", "Current Status")}
           </p>
           <div className="mt-1">
             <StatusBadge value={detail.status} />
@@ -169,7 +171,7 @@ export function ApplicationDetails({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <ShieldCheck size={12} className="text-[#C59B27]" />
-            AI Recommendation
+            {t("details.ai_recommendation", "AI Advisory")}
           </p>
           <div className="mt-1">
             <RecommendationBadge value={detail.ai_recommendation} />
@@ -179,7 +181,7 @@ export function ApplicationDetails({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <AlertTriangle size={12} className="text-amber-500" />
-            Risk Level
+            {t("common.priority", "Risk Level")}
           </p>
           <div className="mt-1">
             <RiskBadge value={pred?.prediction_class} />
@@ -188,7 +190,7 @@ export function ApplicationDetails({
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-            Submission Date
+            {t("details.submitted_date", "Submission Date")}
           </p>
           <p className="text-sm font-bold text-[#0A2540] mt-1">
             {fmtDate(detail.created_at)}
@@ -224,14 +226,14 @@ export function ApplicationDetails({
       {/* ══ OVERVIEW TAB ═════════════════════════════════════════ */}
       {tab === "overview" && (
         <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
-          {/* Left: Well-proportioned Application Summary + Documents */}
+          {/* Left: Application Summary + Documents */}
           <div className="space-y-6">
             {/* Application Summary Box */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileText size={16} className="text-[#0A2540]" />
-                  <h2 className="text-sm font-bold text-[#0A2540]">Application Summary</h2>
+                  <h2 className="text-sm font-bold text-[#0A2540]">{t("details.case_info", "Application Summary")}</h2>
                 </div>
                 {detail.project_category && (
                   <span className="rounded-lg bg-slate-200/80 px-2.5 py-1 text-xs font-semibold text-slate-700">
@@ -272,16 +274,16 @@ export function ApplicationDetails({
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={16} className="text-[#0A2540]" />
-                  <h2 className="text-sm font-bold text-[#0A2540]">Submitted Documents</h2>
+                  <h2 className="text-sm font-bold text-[#0A2540]">{t("details.tab_documents", "Submitted Documents")}</h2>
                 </div>
                 <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                  {detail.documents.length} files
+                  {detail.documents.length} {t("common.records", "files")}
                 </span>
               </div>
 
               <div className="p-6">
                 {detail.documents.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic text-center py-6">No documents submitted.</p>
+                  <p className="text-sm text-slate-400 italic text-center py-6">{t("common.no_data", "No documents submitted.")}</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {detail.documents.map(doc => {
@@ -308,12 +310,12 @@ export function ApplicationDetails({
                             <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
                               isOk ? "bg-emerald-50 text-emerald-700" : isFail ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"
                             }`}>
-                              {isOk ? "Ready" : isFail ? "Failed" : "Pending"}
+                              {isOk ? t("common.passed", "Ready") : isFail ? t("common.failed", "Failed") : t("common.pending", "Pending")}
                             </span>
                             <button
                               onClick={() => onDeleteDocument(doc.id)}
                               className="p-1 text-slate-300 hover:text-rose-500 transition rounded"
-                              title="Remove document"
+                              title={t("details.delete_doc_confirm", "Remove document")}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -334,7 +336,7 @@ export function ApplicationDetails({
               <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-5 space-y-2.5 shadow-2xs">
                 <p className="text-xs font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
                   <XCircle size={14} className="text-rose-600" />
-                  Missing / Failed Documents
+                  {t("common.error", "Missing / Failed Documents")}
                 </p>
                 <div className="space-y-1.5">
                   {missingDocs.map(d => (
@@ -349,14 +351,14 @@ export function ApplicationDetails({
             {/* Validation Breakdown */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0A2540]">Validation Checks</h3>
-                <span className="text-xs font-bold text-slate-500">{detail.validation_results.length} Total</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0A2540]">{t("details.tab_validation", "Validation Checks")}</h3>
+                <span className="text-xs font-bold text-slate-500">{detail.validation_results.length} {t("common.all", "Total")}</span>
               </div>
               <div className="space-y-2.5">
                 {[
-                  { n: passes.length, label: "Passed Checks",    icon: <CheckCircle2 size={15} className="text-emerald-600" />, color: "text-emerald-700", bg: "bg-emerald-50/60" },
-                  { n: warns.length,  label: "Need Verification", icon: <AlertTriangle size={15} className="text-amber-600" />, color: "text-amber-700", bg: "bg-amber-50/60" },
-                  { n: fails.length,  label: "Failed Checks",     icon: <XCircle size={15} className="text-rose-600" />,     color: "text-rose-700", bg: "bg-rose-50/60" },
+                  { n: passes.length, label: t("validation.kpi_passed", "Passed Checks"),    icon: <CheckCircle2 size={15} className="text-emerald-600" />, color: "text-emerald-700", bg: "bg-emerald-50/60" },
+                  { n: warns.length,  label: t("validation.kpi_warnings", "Need Verification"), icon: <AlertTriangle size={15} className="text-amber-600" />, color: "text-amber-700", bg: "bg-amber-50/60" },
+                  { n: fails.length,  label: t("validation.kpi_contradictions", "Failed Checks"),     icon: <XCircle size={15} className="text-rose-600" />,     color: "text-rose-700", bg: "bg-rose-50/60" },
                 ].map(({ n, label, icon, color, bg }) => (
                   <div key={label} className={`flex items-center justify-between p-2.5 rounded-xl border border-slate-100 ${bg}`}>
                     <div className="flex items-center gap-2.5">
@@ -376,24 +378,24 @@ export function ApplicationDetails({
                   onClick={() => setConfirmDelete(true)}
                   className="w-full text-xs font-semibold text-slate-400 hover:text-rose-600 transition text-center py-1 flex items-center justify-center gap-1.5"
                 >
-                  <Trash2 size={13} /> Delete this application
+                  <Trash2 size={13} /> {t("details.delete_app_btn", "Delete this application")}
                 </button>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-rose-700">Permanently delete this application and all associated data?</p>
+                  <p className="text-xs font-bold text-rose-700">{t("details.delete_app_confirm", "Permanently delete this application and all associated data?")}</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => { onDeleteApplication(detail.id); setConfirmDelete(false); }}
                       disabled={busy}
                       className="flex-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700 transition shadow-xs"
                     >
-                      Confirm Delete
+                      {t("common.confirm", "Confirm Delete")}
                     </button>
                     <button
                       onClick={() => setConfirmDelete(false)}
                       className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
                     >
-                      Cancel
+                      {t("common.cancel", "Cancel")}
                     </button>
                   </div>
                 </div>
@@ -407,10 +409,10 @@ export function ApplicationDetails({
       {tab === "documents" && (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#0A2540]">Submitted Documents ({detail.documents.length})</h2>
+            <h2 className="text-sm font-bold text-[#0A2540]">{t("details.tab_documents", "Submitted Documents")} ({detail.documents.length})</h2>
           </div>
           {detail.documents.length === 0 ? (
-            <p className="p-10 text-center text-sm text-slate-400">No documents submitted.</p>
+            <p className="p-10 text-center text-sm text-slate-400">{t("common.no_data", "No documents submitted.")}</p>
           ) : (
             <div className="divide-y divide-slate-100">
               {detail.documents.map(doc => {
@@ -424,14 +426,14 @@ export function ApplicationDetails({
                               <HelpCircle size={18} className="text-amber-500 shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{doc.filename}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{doc.document_type || "Document"} • Uploaded on {fmtDate(doc.uploaded_at)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{doc.document_type || "Document"} • {fmtDate(doc.uploaded_at)}</p>
                     </div>
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${
                       isOk ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
                       isFail ? "bg-rose-50 text-rose-700 border border-rose-200" :
                       "bg-amber-50 text-amber-700 border border-amber-200"
                     }`}>
-                      {isOk ? "Ready" : isFail ? "Failed" : "Pending"}
+                      {isOk ? t("common.passed", "Ready") : isFail ? t("common.failed", "Failed") : t("common.pending", "Pending")}
                     </span>
                   </div>
                 );
@@ -446,9 +448,9 @@ export function ApplicationDetails({
         <div className="space-y-5">
           <div className="flex flex-wrap gap-3">
             {[
-              { n: passes.length, label: "Passed Checks",      cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-              { n: warns.length,  label: "Need Verification",  cls: "border-amber-200 bg-amber-50 text-amber-800" },
-              { n: fails.length,  label: "Failed Checks",      cls: "border-rose-200 bg-rose-50 text-rose-800" },
+              { n: passes.length, label: t("validation.kpi_passed", "Passed Checks"),      cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+              { n: warns.length,  label: t("validation.kpi_warnings", "Need Verification"),  cls: "border-amber-200 bg-amber-50 text-amber-800" },
+              { n: fails.length,  label: t("validation.kpi_contradictions", "Failed Checks"),      cls: "border-rose-200 bg-rose-50 text-rose-800" },
             ].map(({ n, label, cls }) => (
               <div key={label} className={`rounded-xl border px-4 py-2.5 text-sm font-bold shadow-2xs ${cls}`}>
                 {n} {label}
@@ -458,14 +460,18 @@ export function ApplicationDetails({
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#0A2540]">All Validation Checks</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#0A2540]">{t("validation.tab_all", "All Validation Checks")}</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
-                    {["Check Name", "Status", "Details"].map(h => (
-                      <th key={h} className={`text-left px-5 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest ${h === "Details" ? "hidden md:table-cell" : ""}`}>{h}</th>
+                    {[
+                      { label: t("validation.col_check", "Check Name"), hide: "" },
+                      { label: t("validation.col_status", "Status"), hide: "" },
+                      { label: t("validation.col_rationale", "Details"), hide: "hidden md:table-cell" }
+                    ].map((h, i) => (
+                      <th key={i} className={`text-left px-5 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest ${h.hide}`}>{h.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -500,7 +506,7 @@ export function ApplicationDetails({
         <div className="space-y-4">
           {meaningfulEvidence.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-              <p className="text-sm text-slate-400">Evidence could not be retrieved for this application.</p>
+              <p className="text-sm text-slate-400">{t("common.no_data", "Evidence could not be retrieved for this application.")}</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -515,7 +521,7 @@ export function ApplicationDetails({
         <div className="space-y-3">
           {detail.rule_results.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-              <p className="text-sm text-slate-400">No scheme rules have been evaluated yet.</p>
+              <p className="text-sm text-slate-400">{t("schemes.rules_count", "No scheme rules have been evaluated yet.")}</p>
             </div>
           ) : (
             detail.rule_results.map(r => {
@@ -528,7 +534,7 @@ export function ApplicationDetails({
                       <p className="text-xs text-slate-600 mt-1 leading-relaxed">{r.reason}</p>
                     </div>
                     <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${pass ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                      {pass ? "✓ Pass" : "✕ Fail"}
+                      {pass ? `✓ ${t("common.passed", "Pass")}` : `✕ ${t("common.failed", "Fail")}`}
                     </span>
                   </div>
                 </div>
@@ -540,3 +546,4 @@ export function ApplicationDetails({
     </div>
   );
 }
+

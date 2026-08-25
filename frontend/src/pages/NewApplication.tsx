@@ -5,29 +5,13 @@ import { useState, useRef } from "react";
 import type { FormEvent } from "react";
 import {
   CheckCircle2, ChevronRight, FileText, Loader2, Upload, X,
-  ShieldCheck, ArrowLeft, Mail, Building, MapPin, DollarSign,
-  Calendar, Layers,
+  ShieldCheck, ArrowLeft, Mail,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AlertBanner, PageHeader } from "../components/ui";
 import type { SchemeRead } from "../types/api";
 
 type Step = 1 | 2 | 3;
-
-const STEPS = [
-  { n: 1 as Step, label: "Application Details", desc: "Applicant & project information" },
-  { n: 2 as Step, label: "Documents", desc: "Upload clearance files" },
-  { n: 3 as Step, label: "Review & Submit", desc: "Final verification" },
-];
-
-/* ── Accepted document types ──────────────────────────────────────── */
-const REQUIRED_DOC_TYPES = [
-  "Application Form",
-  "Project Budget & Costs",
-  "Organisation Certificate",
-  "Technical Proposal / EIA",
-  "Environmental Impact Assessment",
-  "Land Ownership / Lease",
-];
 
 export function NewApplication({
   schemes,
@@ -36,10 +20,26 @@ export function NewApplication({
   schemes: SchemeRead[];
   onCreate: (payload: Record<string, unknown>, files: FileList | null) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  const STEPS = [
+    { n: 1 as Step, label: t("new_app.step1_label", "Application Details"), desc: t("new_app.step1_desc", "Applicant & project information") },
+    { n: 2 as Step, label: t("new_app.step2_label", "Documents"), desc: t("new_app.step2_desc", "Upload clearance files") },
+    { n: 3 as Step, label: t("new_app.step3_label", "Review & Submit"), desc: t("new_app.step3_desc", "Final verification") },
+  ];
+
+  const REQUIRED_DOC_TYPES = [
+    t("new_app.doc_application_form", "Application Form"),
+    t("new_app.doc_budget", "Project Budget & Costs"),
+    t("new_app.doc_org_cert", "Organisation Certificate"),
+    t("new_app.doc_proposal", "Technical Proposal / EIA"),
+    t("new_app.doc_eia", "Environmental Impact Assessment"),
+    t("new_app.doc_land", "Land Ownership / Lease"),
+  ];
 
   // Form state
   const [schemeId,       setSchemeId]       = useState(schemes[0]?.id ?? "");
@@ -91,7 +91,7 @@ export function NewApplication({
       }, dt.files.length > 0 ? dt.files : null);
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
+      setError(err instanceof Error ? err.message : t("common.error", "Submission failed. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -107,15 +107,15 @@ export function NewApplication({
             <CheckCircle2 size={36} />
           </div>
           <div>
-            <h2 className="text-2xl font-extrabold text-[#0A2540]">Application Submitted Successfully</h2>
+            <h2 className="text-2xl font-extrabold text-[#0A2540]">{t("new_app.success_title", "Application Successfully Submitted")}</h2>
             <p className="text-sm text-slate-500 max-w-md mx-auto mt-2 leading-relaxed">
-              Your environmental review package has been created and will now proceed to automated document extraction, validation, and AI assessment.
+              {t("new_app.success_sub", "The application has been enrolled and initial data extraction is underway.")}
             </p>
           </div>
           <div className="pt-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-xs font-bold text-emerald-800">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Processing Pipeline Queued
+              {t("common.processing", "Processing Pipeline Queued")}
             </span>
           </div>
         </div>
@@ -126,12 +126,12 @@ export function NewApplication({
   return (
     <div className="max-w-[900px] mx-auto space-y-7 animate-slide-up font-sans">
       <PageHeader
-        title="New Application"
-        subtitle="Submit a project application package for environmental clearance review."
-        breadcrumb="Workspace"
+        title={t("new_app.title", "Submit New Environmental Clearance Application")}
+        subtitle={t("new_app.subtitle", "3-step guided application intake for statutory environmental review")}
+        breadcrumb={t("nav.group_workspace", "Workspace")}
       />
 
-      {/* ── Step Indicator (Matches Landing/Login Stepper) ────────────────────────────────────────── */}
+      {/* ── Step Indicator ────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
         {STEPS.map((s) => {
           const done   = s.n < step;
@@ -162,7 +162,7 @@ export function NewApplication({
               </div>
               <div className="min-w-0 hidden sm:block">
                 <p className={`text-xs font-bold uppercase tracking-wider leading-none ${active ? "text-slate-200" : done ? "text-emerald-800" : "text-slate-400"}`}>
-                  Step 0{s.n}
+                  {t("common.details", "Step")} 0{s.n}
                 </p>
                 <p className={`text-sm font-semibold truncate mt-1 ${active ? "text-white" : done ? "text-emerald-950" : "text-slate-700"}`}>
                   {s.label}
@@ -182,21 +182,21 @@ export function NewApplication({
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <FileText size={17} className="text-[#0A2540]" />
-                <h2 className="text-sm font-bold text-[#0A2540]">Step 1: Application Details</h2>
+                <h2 className="text-sm font-bold text-[#0A2540]">{t("new_app.step1_label", "Application Details")}</h2>
               </div>
-              <span className="text-xs font-semibold text-slate-400">Required fields marked with *</span>
+              <span className="text-xs font-semibold text-slate-400">* {t("common.required", "Required")}</span>
             </div>
 
             <div className="p-7 space-y-6">
               {/* Scheme Dropdown */}
-              <FormField label="Applicable Environmental Scheme" required>
+              <FormField label={t("new_app.scheme_select_label", "Environmental Scheme / Regulation Category")} required>
                 <select
                   className="form-select text-sm font-medium"
                   value={schemeId}
                   onChange={e => setSchemeId(e.target.value)}
                   required
                 >
-                  <option value="">Select a scheme…</option>
+                  <option value="">{t("common.select_language", "Select a scheme…")}</option>
                   {schemes.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -210,23 +210,23 @@ export function NewApplication({
 
               {/* Applicant Name & Email ID */}
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Applicant Full Name" required>
+                <FormField label={t("new_app.applicant_name_label", "Applicant Full Name")} required>
                   <input
                     className="form-input"
-                    placeholder="e.g. Rajesh Kumar Sharma"
+                    placeholder={t("new_app.applicant_name_placeholder", "e.g. Rajesh Kumar Sharma")}
                     value={applicant}
                     onChange={e => setApplicant(e.target.value)}
                     required
                   />
                 </FormField>
 
-                <FormField label="Applicant Email Address" required>
+                <FormField label={t("new_app.applicant_email_label", "Applicant Official Email Address")} required>
                   <div className="relative">
                     <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input
                       type="email"
                       className="form-input pl-9"
-                      placeholder="applicant@organization.gov.in"
+                      placeholder={t("new_app.applicant_email_placeholder", "applicant@organization.gov.in")}
                       value={applicantEmail}
                       onChange={e => setApplicantEmail(e.target.value)}
                       required
@@ -237,19 +237,19 @@ export function NewApplication({
 
               {/* Organisation & Project Title */}
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Organisation / Entity Name">
+                <FormField label={t("new_app.org_name_label", "Organisation / Entity Name")}>
                   <input
                     className="form-input"
-                    placeholder="e.g. Pune Municipal Infrastructure Corp"
+                    placeholder={t("new_app.org_name_placeholder", "e.g. Pune Municipal Infrastructure Corp")}
                     value={orgName}
                     onChange={e => setOrgName(e.target.value)}
                   />
                 </FormField>
 
-                <FormField label="Project Title" required>
+                <FormField label={t("new_app.project_title_label", "Project Title")} required>
                   <input
                     className="form-input"
-                    placeholder="e.g. Urban Wetland Bio-Remediation Phase II"
+                    placeholder={t("new_app.project_title_placeholder", "e.g. Urban Wetland Bio-Remediation Phase II")}
                     value={projTitle}
                     onChange={e => setProjTitle(e.target.value)}
                     required
@@ -259,19 +259,19 @@ export function NewApplication({
 
               {/* Category & Location */}
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Project Category">
+                <FormField label={t("new_app.project_cat_label", "Project Category")}>
                   <input
                     className="form-input"
-                    placeholder="e.g. Water Conservation, Solar, Forestry"
+                    placeholder={t("new_app.project_cat_placeholder", "e.g. Water Conservation, Solar, Forestry")}
                     value={projCat}
                     onChange={e => setProjCat(e.target.value)}
                   />
                 </FormField>
 
-                <FormField label="Project Location (City / District)">
+                <FormField label={t("new_app.location_label", "Project Location (City / District)")}>
                   <input
                     className="form-input"
-                    placeholder="e.g. Nagpur, Maharashtra"
+                    placeholder={t("new_app.location_placeholder", "e.g. Nagpur, Maharashtra")}
                     value={location}
                     onChange={e => setLocation(e.target.value)}
                   />
@@ -280,23 +280,23 @@ export function NewApplication({
 
               {/* Cost & Duration */}
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Estimated Project Cost (₹)">
+                <FormField label={t("new_app.cost_label", "Estimated Project Cost (₹)")}>
                   <input
                     className="form-input"
                     type="number"
                     min={0}
-                    placeholder="e.g. 7500000"
+                    placeholder={t("new_app.cost_placeholder", "e.g. 7500000")}
                     value={cost}
                     onChange={e => setCost(e.target.value)}
                   />
                 </FormField>
 
-                <FormField label="Estimated Duration (Months)">
+                <FormField label={t("new_app.duration_label", "Estimated Duration (Months)")}>
                   <input
                     className="form-input"
                     type="number"
                     min={1}
-                    placeholder="e.g. 18"
+                    placeholder={t("new_app.duration_placeholder", "e.g. 18")}
                     value={duration}
                     onChange={e => setDuration(e.target.value)}
                   />
@@ -304,11 +304,11 @@ export function NewApplication({
               </div>
 
               {/* Description */}
-              <FormField label="Project Overview & Environmental Scope">
+              <FormField label={t("new_app.desc_label", "Detailed Project Scope & Environmental Mitigation Summary")}>
                 <textarea
                   className="form-input resize-none text-sm"
                   rows={3}
-                  placeholder="Brief summary of project objectives, environmental clearance scope, and site details…"
+                  placeholder={t("new_app.desc_placeholder", "Brief summary of project objectives, environmental clearance scope, and site details…")}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                 />
@@ -321,7 +321,7 @@ export function NewApplication({
                 onClick={() => setStep(2)}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#0A2540] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#0d2f50] active:scale-[0.98] transition shadow-xs"
               >
-                Next: Upload Documents <ChevronRight size={15} />
+                {t("new_app.next_btn", "Proceed to Documents")} <ChevronRight size={15} />
               </button>
             </div>
           </div>
@@ -333,7 +333,7 @@ export function NewApplication({
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Upload size={17} className="text-[#0A2540]" />
-                <h2 className="text-sm font-bold text-[#0A2540]">Step 2: Upload Documents</h2>
+                <h2 className="text-sm font-bold text-[#0A2540]">{t("new_app.upload_title", "Upload Application Documents")}</h2>
               </div>
               <span className="text-xs font-semibold text-slate-400">PDF, DOCX, XLSX, Images</span>
             </div>
@@ -342,15 +342,15 @@ export function NewApplication({
               {/* Required types reference */}
               <div>
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">
-                  Typically Required Document Types
+                  {t("new_app.required_doc_checklist", "Required Statutory Documents Checklist")}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {REQUIRED_DOC_TYPES.map(t => (
+                  {REQUIRED_DOC_TYPES.map(docType => (
                     <span
-                      key={t}
+                      key={docType}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700"
                     >
-                      <FileText size={12} className="text-[#0A2540]" /> {t}
+                      <FileText size={12} className="text-[#0A2540]" /> {docType}
                     </span>
                   ))}
                 </div>
@@ -366,9 +366,9 @@ export function NewApplication({
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white border border-slate-200 text-[#0A2540] shadow-xs group-hover:scale-105 transition-transform mb-3">
                   <Upload size={24} />
                 </div>
-                <p className="text-sm font-bold text-[#0A2540]">Drop files here or click to browse</p>
+                <p className="text-sm font-bold text-[#0A2540]">{t("new_app.drop_zone_text", "Click or drag clearance files here to upload")}</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                  Upload EIA reports, municipal certificates, project proposals, and financial budgets.
+                  {t("new_app.upload_sub", "Attach all statutory clearance reports, identity documents, and technical proposals.")}
                 </p>
                 <input
                   ref={fileRef}
@@ -385,14 +385,14 @@ export function NewApplication({
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      {files.length} Document{files.length > 1 ? "s" : ""} Selected
+                      {files.length} {t("new_app.attached_files", "Attached Files")}
                     </p>
                     <button
                       type="button"
                       onClick={() => setFiles([])}
                       className="text-xs font-semibold text-rose-600 hover:text-rose-700"
                     >
-                      Clear All
+                      {t("common.clear", "Clear All")}
                     </button>
                   </div>
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -414,7 +414,7 @@ export function NewApplication({
                           type="button"
                           onClick={() => removeFile(i)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          title="Remove file"
+                          title={t("new_app.remove", "Remove")}
                         >
                           <X size={15} />
                         </button>
@@ -431,14 +431,14 @@ export function NewApplication({
                 onClick={() => setStep(1)}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
               >
-                <ArrowLeft size={15} /> Back to Details
+                <ArrowLeft size={15} /> {t("new_app.prev_btn", "Back")}
               </button>
               <button
                 type="button"
                 onClick={() => setStep(3)}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#0A2540] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#0d2f50] active:scale-[0.98] transition shadow-xs"
               >
-                Next: Review &amp; Submit <ChevronRight size={15} />
+                {t("new_app.step3_label", "Review & Submit")} <ChevronRight size={15} />
               </button>
             </div>
           </div>
@@ -450,28 +450,28 @@ export function NewApplication({
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <ShieldCheck size={17} className="text-[#0A2540]" />
-                <h2 className="text-sm font-bold text-[#0A2540]">Step 3: Review &amp; Final Submission</h2>
+                <h2 className="text-sm font-bold text-[#0A2540]">{t("new_app.review_heading", "Review Application Summary")}</h2>
               </div>
-              <span className="text-xs font-semibold text-slate-400">Confirm all details</span>
+              <span className="text-xs font-semibold text-slate-400">{t("new_app.step3_desc", "Final verification")}</span>
             </div>
 
             <div className="p-7 space-y-6">
               <div className="grid gap-3.5 sm:grid-cols-2">
-                <ReviewBox label="Applicable Scheme" value={selectedScheme?.name} highlight />
-                <ReviewBox label="Applicant Full Name" value={applicant} />
-                <ReviewBox label="Applicant Email ID" value={applicantEmail} />
-                <ReviewBox label="Organisation" value={orgName} />
-                <ReviewBox label="Project Title" value={projTitle} />
-                <ReviewBox label="Project Category" value={projCat} />
-                <ReviewBox label="Project Location" value={location} />
-                <ReviewBox label="Estimated Cost" value={cost ? `₹${Number(cost).toLocaleString("en-IN")}` : null} />
-                <ReviewBox label="Duration" value={duration ? `${duration} Months` : null} />
-                <ReviewBox label="Uploaded Documents" value={`${files.length} Document file(s)`} />
+                <ReviewBox label={t("details.scheme", "Scheme")} value={selectedScheme?.name} highlight />
+                <ReviewBox label={t("details.applicant_name", "Applicant Full Name")} value={applicant} />
+                <ReviewBox label={t("details.applicant_email", "Applicant Email")} value={applicantEmail} />
+                <ReviewBox label={t("details.organization", "Organization")} value={orgName} />
+                <ReviewBox label={t("details.project_title", "Project Title")} value={projTitle} />
+                <ReviewBox label={t("details.project_cat", "Category")} value={projCat} />
+                <ReviewBox label={t("details.location", "Location")} value={location} />
+                <ReviewBox label={t("details.cost", "Estimated Cost")} value={cost ? `₹${Number(cost).toLocaleString("en-IN")}` : null} />
+                <ReviewBox label={t("details.duration", "Duration")} value={duration ? `${duration} ${t("details.duration", "Months")}` : null} />
+                <ReviewBox label={t("details.documents_count", "Documents Uploaded")} value={`${files.length} ${t("common.records", "files")}`} />
               </div>
 
               {description && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Project Description</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{t("new_app.desc_label", "Project Overview")}</p>
                   <p className="text-sm text-slate-700 leading-relaxed">{description}</p>
                 </div>
               )}
@@ -480,9 +480,9 @@ export function NewApplication({
               <div className="rounded-xl border border-[#C59B27]/40 bg-[#FFFBEB] p-4 flex items-start gap-3">
                 <ShieldCheck size={18} className="text-[#B45309] shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-bold text-[#B45309] uppercase tracking-wide">Ready For Official Review</p>
+                  <p className="text-xs font-bold text-[#B45309] uppercase tracking-wide">{t("common.app_tagline", "AI ASSISTS · HUMAN DECIDES")}</p>
                   <p className="text-xs text-[#78350F] mt-0.5 leading-relaxed">
-                    By submitting, the system will immediately initiate automated text extraction, guideline cross-validation, and ML risk scoring.
+                    {t("new_app.review_sub", "Verify submission details before initiating automated ingestion and statutory review.")}
                   </p>
                 </div>
               </div>
@@ -494,7 +494,7 @@ export function NewApplication({
                 onClick={() => setStep(2)}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
               >
-                <ArrowLeft size={15} /> Back to Documents
+                <ArrowLeft size={15} /> {t("new_app.prev_btn", "Back")}
               </button>
               <button
                 type="submit"
@@ -504,12 +504,12 @@ export function NewApplication({
                 {busy ? (
                   <>
                     <Loader2 size={16} className="animate-spin text-[#C59B27]" />
-                    Submitting Application Package…
+                    {t("new_app.submitting", "Submitting Application...")}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 size={16} className="text-[#C59B27]" />
-                    Submit Application
+                    {t("new_app.submit_btn", "Submit Application & Start Pipeline")}
                   </>
                 )}
               </button>

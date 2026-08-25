@@ -15,21 +15,21 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "../components/LanguageSelector";
 
 interface LandingPageProps {
   onLaunchControlRoom: () => void;
 }
 
 export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
+  const { t } = useTranslation();
+
   function scrollToHowItWorks() {
     const el = document.getElementById("how-it-works");
     if (el) {
       el.scrollIntoView({ behavior: "smooth" });
     }
-  }
-
-  function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -42,30 +42,33 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
           </div>
           <div>
             <div className="font-sans text-sm sm:text-base font-bold tracking-wide text-[#FFFFFF] flex items-center gap-2">
-              <span>DECC REVIEW PORTAL</span>
+              <span>{t("common.app_title", "DECC REVIEW PORTAL")}</span>
               <span className="h-1.5 w-1.5 rounded-full bg-[#C59B27]" />
             </div>
             <div className="font-sans text-xs sm:text-sm text-[#94A3B8] tracking-tight">
-              Environmental Application Review & Decision Support • Government Portal
+              {t("common.app_subtitle", "Environmental Application Review & Decision Support • Government Portal")}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6">
           <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-[#CBD5E1]">
             <button
               onClick={scrollToHowItWorks}
               className="hover:text-[#FFFFFF] transition-colors focus:outline-none"
             >
-              How It Works
+              {t("landing.how_it_works", "How It Works")}
             </button>
           </nav>
+
+          {/* Multilingual Selector */}
+          <LanguageSelector variant="dark" />
 
           <button
             onClick={onLaunchControlRoom}
             className="flex items-center gap-2 rounded-[6px] bg-[#C59B27] px-4 py-2 font-sans text-xs font-bold text-[#0A2540] transition-colors hover:bg-[#b0881e] focus:outline-none focus:ring-2 focus:ring-[#C59B27] shadow-xs"
           >
-            <span>Launch Control Room</span>
+            <span>{t("common.launch_control_room", "Launch Control Room")}</span>
             <ArrowRight size={14} />
           </button>
         </div>
@@ -77,18 +80,18 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
         <section className="text-center max-w-4xl mx-auto space-y-4 pt-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#C59B27]/40 bg-[#FFFBEB] px-3.5 py-1 text-xs font-semibold text-[#B45309] shadow-2xs">
             <span className="h-2 w-2 rounded-full bg-[#D97706]" />
-            <span>MAHARASHTRA STATE ENVIRONMENTAL CLEARANCE PORTAL</span>
+            <span>{t("landing.badge", "MAHARASHTRA STATE ENVIRONMENTAL CLEARANCE PORTAL")}</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#0A2540] tracking-tight leading-tight">
-            Transform Environmental Clearance Reviews From Months to{" "}
+            {t("landing.hero_title", "Transform Environmental Clearance Reviews From Months to")}{" "}
             <span className="bg-gradient-to-r from-[#0EA5E9] via-[#0284C7] to-[#0A2540] bg-clip-text text-transparent">
-              Minutes
+              {t("landing.hero_title_accent", "Minutes")}
             </span>
           </h1>
 
           <p className="text-sm sm:text-base text-[#475569] max-w-2xl mx-auto leading-relaxed font-sans">
-            Extract structured data from application packages, verify PAN/GSTIN/Aadhaar entities against registry databases, and complete official reviews in minutes.
+            {t("landing.hero_desc", "Extract structured data from application packages, verify PAN/GSTIN/Aadhaar entities against registry databases, and complete official reviews with AI-assisted decision support.")}
           </p>
 
           <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -96,7 +99,7 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
               onClick={onLaunchControlRoom}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-[6px] bg-[#0A2540] px-7 py-3 font-sans text-sm font-bold text-[#FFFFFF] transition-all hover:bg-[#153454] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0A2540]"
             >
-              <span>Launch Control Room</span>
+              <span>{t("common.launch_control_room", "Launch Control Room")}</span>
               <ArrowRight size={16} />
             </button>
           </div>
@@ -108,11 +111,11 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-[#0A2540]" />
               <h2 className="font-sans text-xs font-bold tracking-wide text-[#0A2540] uppercase">
-                Process Comparison
+                {t("landing.process_comparison", "Process Comparison")}
               </h2>
             </div>
             <div className="font-sans text-[11px] text-[#64748B]">
-              Traditional Paperwork vs. DECC Control Room Automated Verification
+              {t("landing.process_comparison_sub", "Traditional Paperwork vs. DECC Control Room Automated Verification")}
             </div>
           </div>
 
@@ -125,11 +128,11 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#DC2626]" />
                   <span className="font-sans text-xs font-bold tracking-wide text-[#DC2626] uppercase">
-                    MANUAL DOCUMENT PROCESS
+                    {t("landing.traditional_title", "Manual Document Process")}
                   </span>
                 </div>
                 <span className="font-sans text-[10px] font-semibold text-[#DC2626] border border-[#FCA5A5] bg-[#FEF2F2] px-2 py-0.5 rounded-[4px] shrink-0">
-                  UNVERIFIED PROCESS
+                  {t("landing.traditional_badge", "MANUAL FRICTION")}
                 </span>
               </div>
 
@@ -140,7 +143,6 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                   alt="Manual document paperwork backlog with clock"
                   className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103"
                 />
-                {/* Smooth Soft Outer & Inner Edge Shading Overlay */}
                 <div className="absolute inset-0 shadow-[inset_0_0_16px_rgba(0,0,0,0.2)] rounded-[8px] pointer-events-none" />
                 <div className="absolute inset-0 ring-1 ring-black/10 rounded-[8px] pointer-events-none" />
               </div>
@@ -148,12 +150,10 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
               {/* Red X Checklist Items */}
               <ul className="space-y-2.5 text-xs text-[#0F172A]">
                 {[
-                  "Manual document verification",
-                  "Multiple departments & delays",
-                  "Inconsistent rule application",
-                  "Limited data & site verification",
-                  "Long review cycles",
-                  "High risk of human error",
+                  t("landing.traditional_item1_desc", "Manual reading of lengthy Environmental Impact Assessment reports causes severe reviewer fatigue."),
+                  t("landing.traditional_item2_desc", "Manual cross-referencing across separate PAN, GSTIN, and corporate portals leads to multi-week delays."),
+                  t("landing.traditional_item3_desc", "Cumbersome paper-based workflows delay critical state infrastructure and industry investments."),
+                  t("landing.traditional_item4_desc", "Differing reviewer interpretations produce inconsistent rule enforcement across districts."),
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5">
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FEF2F2] text-[#DC2626] border border-[#FCA5A5] shrink-0 mt-0.5 font-bold text-[11px]">
@@ -167,7 +167,7 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
               {/* Summary Strip */}
               <div className="pt-3 border-t border-[#E2E8F0]">
                 <div className="bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] font-semibold text-xs py-2 px-3 rounded-[6px] text-center">
-                  Months of Delay • High Uncertainty • Manual Errors
+                  {t("landing.traditional_item3_title", "3–6 Months Clearance Cycle")} • {t("common.high_risk", "High Risk")}
                 </div>
               </div>
             </div>
@@ -186,11 +186,11 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#16A34A]" />
                   <span className="font-sans text-xs font-bold tracking-wide text-[#0A2540] uppercase">
-                    DECC CONTROL ROOM VERIFICATION
+                    {t("landing.automated_title", "DECC Control Room Verification")}
                   </span>
                 </div>
                 <span className="font-sans text-[10px] font-semibold text-[#15803D] border border-[#86EFAC] bg-[#DCFCE7] px-2 py-0.5 rounded-[4px] shrink-0">
-                  VERIFIED BY SYSTEM
+                  {t("landing.automated_badge", "AUTOMATED EFFICIENCY")}
                 </span>
               </div>
 
@@ -201,7 +201,6 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                   alt="Digital DECC Control Room verification workspace"
                   className="w-full h-48 sm:h-52 object-cover object-center transition-transform duration-500 group-hover:scale-103"
                 />
-                {/* Smooth Soft Outer & Inner Edge Shading Overlay */}
                 <div className="absolute inset-0 shadow-[inset_0_0_16px_rgba(10,37,64,0.2)] rounded-[8px] pointer-events-none" />
                 <div className="absolute inset-0 ring-1 ring-[#0A2540]/15 rounded-[8px] pointer-events-none" />
               </div>
@@ -209,12 +208,10 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
               {/* Green Check Checklist Items */}
               <ul className="space-y-2.5 text-xs text-[#0F172A]">
                 {[
-                  "Automated document extraction & verification",
-                  "Single-window workflow with real-time tracking",
-                  "100% consistent state environmental rule checks",
-                  "Entity & Registry verification (PAN, GSTIN, Aadhaar, Land Registry)",
-                  "Under 3-minute average review cycles",
-                  "Forensic accuracy with complete audit logging",
+                  t("landing.automated_item1_desc", "Instant OCR and schema extraction across PDFs, spreadsheets, and drawings in seconds."),
+                  t("landing.automated_item2_desc", "Automated verification against official PAN, GSTIN, and MCA registry databases with full audit logs."),
+                  t("landing.automated_item3_desc", "Complete policy compliance verification and automated risk summaries generated instantly."),
+                  t("landing.automated_item4_desc", "Every parameter extraction, validation rule check, and decision note is logged to an immutable ledger."),
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5">
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] shrink-0 mt-0.5 font-bold text-[11px]">
@@ -228,7 +225,7 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
               {/* Summary Strip */}
               <div className="pt-3 border-t border-[#E2E8F0]">
                 <div className="bg-[#DCFCE7] border border-[#86EFAC] text-[#15803D] font-semibold text-xs py-2 px-3 rounded-[6px] text-center">
-                  Minutes • Accuracy • Transparency • Trust
+                  {t("landing.hero_title_accent", "Minutes")} • {t("landing.stat2_label", "Audit Traceability")} • {t("common.success", "Success")}
                 </div>
               </div>
             </div>
@@ -240,7 +237,7 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
           <div className="flex items-center gap-2 pb-2 border-b border-[#E2E8F0]">
             <Activity size={16} className="text-[#0A2540]" />
             <h2 className="font-sans text-xs font-bold tracking-wide text-[#0A2540] uppercase">
-              Platform Core Capabilities
+              {t("landing.features_title", "Platform Capabilities")}
             </h2>
           </div>
 
@@ -254,9 +251,9 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <span className="font-mono text-[10px] text-[#64748B]">PARSER</span>
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">AI-Powered Verification</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">{t("landing.feature1_title", "Automated Policy Cross-Reference")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-1 leading-relaxed">
-                  Extract structured data from complex 450+ page EIA reports with clause-level citations.
+                  {t("landing.feature1_desc", "Cross-check application parameters against 14 state environmental guidelines and statutory thresholds.")}
                 </p>
               </div>
             </div>
@@ -270,9 +267,9 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <span className="font-mono text-[10px] text-[#64748B]">ENTITY REGISTRY</span>
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">Registry Integration</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">{t("login.feat3_title", "Entity Registry Check")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-1 leading-relaxed">
-                  Cross-reference applicant details against PAN, GSTIN, Aadhaar, and land registry records.
+                  {t("login.feat3_desc", "Real-time verification against PAN, GSTIN, and Aadhaar databases.")}
                 </p>
               </div>
             </div>
@@ -286,9 +283,9 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <span className="font-mono text-[10px] text-[#64748B]">RULES ENGINE</span>
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">Rule Automation</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">{t("landing.feature3_title", "Statutory Governance & Rules")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-1 leading-relaxed">
-                  Evaluate 14/14 state environmental compliance rules automatically with instant pass/fail validation.
+                  {t("landing.feature3_desc", "Dynamic rule engine allowing administrators to update environmental compliance thresholds in real time.")}
                 </p>
               </div>
             </div>
@@ -302,9 +299,9 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <span className="font-mono text-[10px] text-[#64748B]">AUDIT LEDGER</span>
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">Audit & Traceability</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">{t("nav.audit_trail", "Audit Trail")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-1 leading-relaxed">
-                  Complete timestamped audit trail recording every system extraction, rule evaluation, and human reviewer decision.
+                  {t("audit.subtitle", "Tamper-evident, immutable activity ledger for statutory compliance")}
                 </p>
               </div>
             </div>
@@ -316,7 +313,7 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
           <div className="flex items-center gap-2 pb-2 border-b border-[#E2E8F0]">
             <Layers size={16} className="text-[#0A2540]" />
             <h2 className="font-sans text-xs font-bold tracking-wide text-[#0A2540] uppercase">
-              How It Works
+              {t("landing.how_it_works", "How It Works")}
             </h2>
           </div>
 
@@ -330,13 +327,13 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <FileText size={16} className="text-[#64748B] group-hover:text-[#0A2540] transition-colors" />
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">1. Upload Documents & Maps</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">1. {t("new_app.step2_label", "Documents")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-0.5 leading-relaxed">
-                  Import PDF environmental reports, site maps, and certificates automatically into the system.
+                  {t("new_app.upload_sub", "Attach all statutory clearance reports, identity documents, and technical proposals.")}
                 </p>
               </div>
               <div className="pt-1.5 border-t border-[#E2E8F0] font-mono text-[9px] text-[#64748B]">
-                INPUT: PDF & SITE MAPS
+                INPUT: PDF, DOCX, XLSX
               </div>
             </div>
 
@@ -349,13 +346,13 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <MapPin size={16} className="text-[#64748B] group-hover:text-[#0A2540] transition-colors" />
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">2. Verify Entities & Rules</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">2. {t("validation.title", "Validation & Verification")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-0.5 leading-relaxed">
-                  Cross-reference applicant data against official registries and scheme rulebooks.
+                  {t("validation.subtitle", "Cross-document parameter consistency, registry checks, and contradiction detection")}
                 </p>
               </div>
               <div className="pt-1.5 border-t border-[#E2E8F0] font-mono text-[9px] text-[#64748B]">
-                CHECKS: REGISTRY & RULES
+                CHECKS: PAN, GSTIN, RULES
               </div>
             </div>
 
@@ -368,9 +365,9 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <Gauge size={16} className="text-[#64748B] group-hover:text-[#0A2540] transition-colors" />
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">3. Calculate Compliance Rating</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">3. {t("scoring.title", "AI Assessment & Explainability")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-0.5 leading-relaxed">
-                  Generate an instant risk score with direct links back to specific document clauses.
+                  {t("scoring.subtitle", "Predictive risk evaluation, compliance score, and feature attribution waterfalls")}
                 </p>
               </div>
               <div className="pt-1.5 border-t border-[#E2E8F0] font-mono text-[9px] text-[#64748B]">
@@ -387,13 +384,13 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
                 <CheckCircle2 size={16} className="text-[#16A34A]" />
               </div>
               <div>
-                <h3 className="font-sans text-xs font-bold text-[#0A2540]">4. Officer Makes the Final Call</h3>
+                <h3 className="font-sans text-xs font-bold text-[#0A2540]">4. {t("reviewer.title", "Reviewer Decision Cockpit")}</h3>
                 <p className="font-sans text-[11px] text-[#475569] mt-0.5 leading-relaxed">
-                  A person always reviews and decides — the AI only assists, never approves or rejects automatically.
+                  {t("common.app_tagline_desc", "Final clearance decisions are strictly made by the authorized reviewer.")}
                 </p>
               </div>
               <div className="pt-1.5 border-t border-[#86EFAC]/60 font-sans text-[10px] text-[#15803D] font-bold">
-                FINAL: HUMAN OFFICER DECISION
+                FINAL: {t("reviewer.officer_badge", "AUTHORIZED REVIEWER")}
               </div>
             </div>
           </div>
@@ -405,11 +402,12 @@ export function LandingPage({ onLaunchControlRoom }: LandingPageProps) {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 font-sans text-xs text-[#94A3B8]">
           <div className="flex items-center gap-2 text-[#FFFFFF]">
             <span className="h-2 w-2 rounded-full bg-[#C59B27]" />
-            <span className="font-semibold">Environmental Application Review & Decision Support • Government Platform</span>
+            <span className="font-semibold">{t("common.app_subtitle", "Environmental Application Review & Decision Support • Government Platform")}</span>
           </div>
-          <div className="font-mono text-[11px] text-[#94A3B8]">AI ASSISTS • HUMAN DECIDES</div>
+          <div className="font-mono text-[11px] text-[#94A3B8]">{t("common.app_tagline", "AI ASSISTS · HUMAN DECIDES")}</div>
         </div>
       </footer>
     </div>
   );
 }
+

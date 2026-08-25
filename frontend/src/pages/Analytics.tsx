@@ -1,7 +1,7 @@
 // Analytics.tsx — Clearance Review Analytics.
 // Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C), Soft Gray (#E5E7EB).
-// Medium horizontal KPI cards. Clean Navy/Gold visual charts. Tight, intentional spacing with no excess vertical scroll.
 import { BarChart3, CheckCircle2, ClipboardList, Clock, TrendingUp, ShieldCheck, Activity } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components/ui";
 import type { AnalyticsOverview } from "../types/api";
 
@@ -28,6 +28,7 @@ function BarRow({ label, value, max, isTop }: { label: string; value: number; ma
 }
 
 function ChartCard({ title, data, icon }: { title: string; data?: Record<string, number>; icon?: React.ReactNode }) {
+  const { t } = useTranslation();
   const entries = Object.entries(data ?? {}).filter(([, v]) => v > 0).slice(0, 8);
   const max = Math.max(...entries.map(([, v]) => v), 1);
   if (entries.length === 0) return null;
@@ -39,7 +40,7 @@ function ChartCard({ title, data, icon }: { title: string; data?: Record<string,
           {icon}
           <h3 className="text-xs font-bold text-[#0A243F] uppercase tracking-wider">{title}</h3>
         </div>
-        <span className="text-[10px] font-bold text-[#66717C] uppercase">{entries.length} Metrics</span>
+        <span className="text-[10px] font-bold text-[#66717C] uppercase">{entries.length} {t("scoring.card_evidence", "Metrics")}</span>
       </div>
       <div className="p-5 space-y-0.5">
         {entries.map(([k, v], idx) => (
@@ -51,6 +52,7 @@ function ChartCard({ title, data, icon }: { title: string; data?: Record<string,
 }
 
 export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }) {
+  const { t } = useTranslation();
   const total     = analytics?.total_applications ?? 0;
   const pending   = analytics ? Object.entries(analytics.applications_by_status ?? {})
     .filter(([k]) => k.toUpperCase().includes("AWAITING") || k.toUpperCase().includes("PENDING"))
@@ -69,9 +71,9 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
   return (
     <div className="max-w-[1200px] mx-auto space-y-5 animate-slide-up font-sans">
       <PageHeader
-        title="Analytics &amp; Performance"
-        subtitle="Operational metrics, review outcomes, and scheme throughput."
-        breadcrumb="System"
+        title={t("analytics.title", "Analytics & Insights")}
+        subtitle={t("analytics.subtitle", "System performance, risk distribution, and throughput metrics")}
+        breadcrumb={t("nav.group_overview", "System")}
       />
 
       {/* ── Medium-Sized Proportional Horizontal KPI Row ───────────────────── */}
@@ -81,9 +83,9 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
             <ClipboardList size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Total Applications</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">{t("analytics.total_applications", "Total Applications")}</p>
             <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{total}</p>
-            <p className="text-[10px] text-[#66717C] truncate">Cumulative submissions</p>
+            <p className="text-[10px] text-[#66717C] truncate">{t("dashboard.stat_total_desc", "Cumulative submissions")}</p>
           </div>
         </div>
 
@@ -92,9 +94,9 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
             <Clock size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-[#B45309]">Pending Review</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#B45309]">{t("analytics.avg_risk_score", "Pending Review")}</p>
             <p className="text-2xl font-black text-[#92400E] leading-tight mt-0.5">{pending}</p>
-            <p className="text-[10px] text-[#B45309] truncate">Awaiting officer decision</p>
+            <p className="text-[10px] text-[#B45309] truncate">{t("dashboard.stat_pending_desc", "Awaiting officer decision")}</p>
           </div>
         </div>
 
@@ -103,9 +105,9 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
             <TrendingUp size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Avg Review Time</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">{t("analytics.avg_processing_time", "Avg Processing Time")}</p>
             <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{avgHours}</p>
-            <p className="text-[10px] text-[#66717C] truncate">Submission to clearance</p>
+            <p className="text-[10px] text-[#66717C] truncate">{t("scoring.subtitle", "Submission to clearance")}</p>
           </div>
         </div>
 
@@ -114,9 +116,9 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
             <CheckCircle2 size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">Completed Clearances</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#66717C]">{t("analytics.approval_rate", "Completed Clearances")}</p>
             <p className="text-2xl font-black text-[#0A243F] leading-tight mt-0.5">{completed}</p>
-            <p className="text-[10px] text-[#66717C] truncate">Clearance decisions logged</p>
+            <p className="text-[10px] text-[#66717C] truncate">{t("dashboard.stat_processed_desc", "Clearance decisions logged")}</p>
           </div>
         </div>
       </div>
@@ -125,41 +127,42 @@ export function Analytics({ analytics }: { analytics: AnalyticsOverview | null }
       {analytics ? (
         <div className="grid gap-4 md:grid-cols-2">
           <ChartCard
-            title="Application Status Distribution"
+            title={t("analytics.status_distribution", "Application Status Distribution")}
             data={analytics.applications_by_status}
             icon={<Activity size={15} className="text-[#0A243F]" />}
           />
           <ChartCard
-            title="Review Decisions Breakdown"
+            title={t("analytics.decision_outcomes", "Review Decisions Breakdown")}
             data={analytics.decision_distribution}
             icon={<ShieldCheck size={15} className="text-[#0A243F]" />}
           />
           <ChartCard
-            title="Risk Classification Index"
+            title={t("analytics.risk_distribution", "Risk Classification Index")}
             data={analytics.risk_distribution}
             icon={<TrendingUp size={15} className="text-[#0A243F]" />}
           />
           <ChartCard
-            title="Validation Checklist Observations"
+            title={t("analytics.common_violations", "Validation Checklist Observations")}
             data={analytics.validation_failure_frequency}
             icon={<CheckCircle2 size={15} className="text-[#0A243F]" />}
           />
           <ChartCard
-            title="Processing Volume by Scheme"
+            title={t("analytics.scheme_performance", "Processing Volume by Scheme")}
             data={analytics.scheme_statistics}
             icon={<BarChart3 size={15} className="text-[#0A243F]" />}
           />
           <ChartCard
-            title="Reviewer Caseload Workload"
+            title={t("details.officer", "Reviewer Caseload Workload")}
             data={analytics.reviewer_workload}
             icon={<ClipboardList size={15} className="text-[#0A243F]" />}
           />
         </div>
       ) : (
         <div className="rounded-2xl border border-[#E5E7EB] bg-white p-10 text-center text-[#66717C] text-sm">
-          Analytics data is loading…
+          {t("common.loading", "Analytics data is loading…")}
         </div>
       )}
     </div>
   );
 }
+

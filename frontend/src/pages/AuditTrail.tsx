@@ -1,6 +1,6 @@
 // AuditTrail.tsx — Readable audit event timeline.
-// Primary: event / date / actor / summary. Technical payload in expandable section.
 import { History, User } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { EmptyState, PageHeader, TechnicalDetails } from "../components/ui";
 import type { ApplicationDetail } from "../types/api";
 
@@ -14,23 +14,6 @@ function fmtDate(iso: string | null | undefined) {
   } catch { return iso; }
 }
 
-function humanAction(raw: string): string {
-  const labels: Record<string, string> = {
-    APPLICATION_CREATED:     "Application Submitted",
-    APPLICATION_PROCESSING:  "Processing Started",
-    DOCUMENT_UPLOADED:       "Document Uploaded",
-    DOCUMENT_PROCESSED:      "Document Processed",
-    VALIDATION_COMPLETED:    "Validation Completed",
-    AI_ASSESSMENT_GENERATED: "AI Assessment Generated",
-    REVIEW_OPENED:           "Reviewer Opened Case",
-    DECISION_SUBMITTED:      "Decision Submitted",
-    STATUS_CHANGED:          "Status Updated",
-    FEEDBACK_SUBMITTED:      "Reviewer Feedback Submitted",
-    RULE_EVALUATED:          "Rule Evaluated",
-  };
-  return labels[raw] ?? raw.replaceAll("_", " ");
-}
-
 function eventIcon(action: string): string {
   if (action.includes("DECISION") || action.includes("APPROVED") || action.includes("REJECT")) return "✓";
   if (action.includes("CREATED") || action.includes("SUBMITTED")) return "📋";
@@ -42,12 +25,31 @@ function eventIcon(action: string): string {
 }
 
 export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
+  const { t } = useTranslation();
+
+  function humanAction(raw: string): string {
+    const labels: Record<string, string> = {
+      APPLICATION_CREATED:     t("audit.event_app_created", "Application Submitted"),
+      APPLICATION_PROCESSING:  t("audit.event_proc_started", "Processing Started"),
+      DOCUMENT_UPLOADED:       t("audit.event_doc_uploaded", "Document Uploaded"),
+      DOCUMENT_PROCESSED:      t("audit.event_doc_processed", "Document Processed"),
+      VALIDATION_COMPLETED:    t("audit.event_val_completed", "Validation Completed"),
+      AI_ASSESSMENT_GENERATED: t("audit.event_ai_assessed", "AI Assessment Generated"),
+      REVIEW_OPENED:           t("audit.event_review_opened", "Reviewer Opened Case"),
+      DECISION_SUBMITTED:      t("audit.event_decision_recorded", "Decision Submitted"),
+      STATUS_CHANGED:          t("audit.event_status_changed", "Status Updated"),
+      FEEDBACK_SUBMITTED:      t("audit.event_feedback", "Reviewer Feedback Submitted"),
+      RULE_EVALUATED:          t("audit.event_rules", "Rule Evaluated"),
+    };
+    return labels[raw] ?? raw.replaceAll("_", " ");
+  }
+
   if (!detail) {
     return (
       <EmptyState
         icon={<History size={24} />}
-        title="No application selected"
-        description="Select an application from the Dashboard to view its audit history."
+        title={t("audit.empty_title", "No application selected")}
+        description={t("audit.empty_desc", "Select an application from the Dashboard to view its audit history.")}
       />
     );
   }
@@ -57,21 +59,21 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
   return (
     <div className="max-w-[800px] mx-auto space-y-6">
       <PageHeader
-        title="Audit Log"
-        subtitle={`Event history for: ${detail.project_title ?? "Selected application"}`}
-        breadcrumb="Governance"
+        title={t("audit.title", "Audit Trail & Compliance Log")}
+        subtitle={`${t("audit.subtitle", "Chronological record of evaluation events")}: ${detail.project_title ?? ""}`}
+        breadcrumb={t("nav.group_governance", "Governance")}
         actions={
           <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
             <History size={13} />
-            {events.length} event{events.length !== 1 ? "s" : ""}
+            {events.length} {t("audit.events_count", "events")}
           </span>
         }
       />
 
       {events.length === 0 && (
         <EmptyState
-          title="No audit events yet"
-          description="Events are recorded as the application progresses through the review process."
+          title={t("audit.empty_title", "No audit events yet")}
+          description={t("audit.empty_desc", "Events are recorded as the application progresses through the review process.")}
         />
       )}
 
@@ -108,13 +110,13 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
                     <div className="flex items-center gap-1 mt-0.5 justify-end">
                       <User size={10} className="text-slate-300" />
                       <p className="text-[11px] text-slate-400">
-                        {isSystemEvent ? "AI System" : actor}
+                        {isSystemEvent ? t("audit.system_agent", "AI System") : actor}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <TechnicalDetails label="View event details">
+                <TechnicalDetails label={t("details.technical_evidence_toggle", "View event details")}>
                   <pre className="text-[10px] text-slate-500 whitespace-pre-wrap break-all leading-relaxed">
                     {JSON.stringify(event, null, 2)}
                   </pre>
@@ -127,3 +129,4 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
     </div>
   );
 }
+

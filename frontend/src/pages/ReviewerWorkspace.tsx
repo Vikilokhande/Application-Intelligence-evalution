@@ -1,13 +1,13 @@
 // ReviewerWorkspace.tsx — Human-Readable Decision Cockpit.
 // Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
-// No backend technical jargon (no RAG, LLM, XGBoost terms). Balanced layout covering extra spaces.
 import { useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertTriangle, BarChart3, BookOpen, CheckCircle2, ClipboardList,
-  Copy, ExternalLink, Mail, MessageSquare, Sparkles, UserCheck,
-  ShieldCheck, FileText, ArrowRight, Loader2, Send, X,
+  Copy, Mail, MessageSquare, Sparkles, UserCheck,
+  ShieldCheck, ArrowRight, Loader2, Send, X,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "../services/api";
 import {
   EmptyState, PageHeader,
@@ -16,43 +16,7 @@ import {
 import { StatusBadge } from "../components/StatusBadge";
 import type { ApplicationDetail, WorkflowResponse } from "../types/api";
 
-/* ── Helpers ──────────────────────────────────────────────────────── */
-function derivePriority(detail: ApplicationDetail): { label: string; color: string } {
-  const st  = (detail.status ?? "").toUpperCase();
-  const rec = (detail.ai_recommendation ?? "").toUpperCase();
-  const pred = detail.predictions?.[detail.predictions.length - 1];
-  if (!st.includes("AWAITING_HUMAN_REVIEW")) return { label: "—", color: "text-[#66717C]" };
-  if (pred?.prediction_class === "HIGH_RISK"   || rec.includes("REJECT"))        return { label: "High Priority",   color: "text-rose-700 font-bold" };
-  if (pred?.prediction_class === "MEDIUM_RISK" || rec.includes("CLARIFICATION")) return { label: "Medium Priority", color: "text-[#B45309] font-bold" };
-  if (pred?.prediction_class === "LOW_RISK"    || rec.includes("APPROVE"))       return { label: "Normal",          color: "text-[#0A243F] font-semibold" };
-  return { label: "—", color: "text-[#66717C]" };
-}
-
 function pct(v: number | null | undefined) { return v != null && v > 0 ? `${Math.round(v * 100)}%` : "—"; }
-
-const DECISION_OPTIONS = [
-  {
-    value: "APPROVE",
-    label: "✓  Approve Application",
-    desc: "Application meets all statutory scheme guidelines and requirements.",
-    activeCls: "border-[#0A243F] bg-[#0A243F] text-white shadow-sm",
-    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#0A243F]",
-  },
-  {
-    value: "REQUEST_CLARIFICATION",
-    label: "⚠  Request Clarification",
-    desc: "Additional documentation or parameter clarification required from applicant.",
-    activeCls: "border-[#D5A51A] bg-[#FFFBEB] text-[#92400E] border-2 shadow-sm",
-    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#D5A51A]",
-  },
-  {
-    value: "REJECT",
-    label: "✕  Reject Application",
-    desc: "Application fails mandatory environmental criteria or scheme thresholds.",
-    activeCls: "border-rose-600 bg-[#FEF2F2] text-[#991B1B] border-2 shadow-sm",
-    cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-rose-300",
-  },
-];
 
 /* ── Proportional Navigation Card ───────────────────────────────────── */
 function NavCard({
@@ -115,6 +79,7 @@ export function ReviewerWorkspace({
   busy: boolean;
   onNavigate?: (page: string) => void;
 }) {
+  const { t } = useTranslation();
   const [decision,         setDecision]         = useState("REQUEST_CLARIFICATION");
   const [notes,            setNotes]            = useState("");
   const [overrideReason,   setOverrideReason]   = useState("");
@@ -125,12 +90,47 @@ export function ReviewerWorkspace({
   const [showMailModal,    setShowMailModal]    = useState(false);
   const [copied,           setCopied]           = useState(false);
 
+  function derivePriority(detailItem: ApplicationDetail): { label: string; color: string } {
+    const st  = (detailItem.status ?? "").toUpperCase();
+    const rec = (detailItem.ai_recommendation ?? "").toUpperCase();
+    const p = detailItem.predictions?.[detailItem.predictions.length - 1];
+    if (!st.includes("AWAITING_HUMAN_REVIEW")) return { label: "—", color: "text-[#66717C]" };
+    if (p?.prediction_class === "HIGH_RISK"   || rec.includes("REJECT"))        return { label: t("dashboard.priority_high", "High Priority"),   color: "text-rose-700 font-bold" };
+    if (p?.prediction_class === "MEDIUM_RISK" || rec.includes("CLARIFICATION")) return { label: t("dashboard.priority_medium", "Medium Priority"), color: "text-[#B45309] font-bold" };
+    if (p?.prediction_class === "LOW_RISK"    || rec.includes("APPROVE"))       return { label: t("dashboard.priority_low", "Normal"),          color: "text-[#0A243F] font-semibold" };
+    return { label: "—", color: "text-[#66717C]" };
+  }
+
+  const DECISION_OPTIONS = [
+    {
+      value: "APPROVE",
+      label: `✓  ${t("reviewer.decision_approve", "Approve Application")}`,
+      desc: t("reviewer.decision_approve_desc", "Application meets all statutory scheme guidelines and requirements."),
+      activeCls: "border-[#0A243F] bg-[#0A243F] text-white shadow-sm",
+      cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#0A243F]",
+    },
+    {
+      value: "REQUEST_CLARIFICATION",
+      label: `⚠  ${t("reviewer.decision_clarification", "Request Clarification")}`,
+      desc: t("reviewer.decision_clarification_desc", "Additional documentation or parameter clarification required from applicant."),
+      activeCls: "border-[#D5A51A] bg-[#FFFBEB] text-[#92400E] border-2 shadow-sm",
+      cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-[#D5A51A]",
+    },
+    {
+      value: "REJECT",
+      label: `✕  ${t("reviewer.decision_reject", "Reject Application")}`,
+      desc: t("reviewer.decision_reject_desc", "Application fails mandatory environmental criteria or scheme thresholds."),
+      activeCls: "border-rose-600 bg-[#FEF2F2] text-[#991B1B] border-2 shadow-sm",
+      cls: "border-[#E5E7EB] bg-white text-[#071A2B] hover:bg-[#F8F9FA] hover:border-rose-300",
+    },
+  ];
+
   if (!detail) {
     return (
       <EmptyState
         icon={<ClipboardList size={24} />}
-        title="No application selected"
-        description="Select an application from the Dashboard to begin your review."
+        title={t("audit.empty_title", "No application selected")}
+        description={t("audit.empty_desc", "Select an application from the Dashboard to begin your review.")}
       />
     );
   }
@@ -187,9 +187,9 @@ export function ReviewerWorkspace({
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0A243F] text-[#D5A51A]">
             <CheckCircle2 size={36} />
           </div>
-          <h2 className="text-2xl font-extrabold text-[#0A243F]">Review Decision Recorded</h2>
+          <h2 className="text-2xl font-extrabold text-[#0A243F]">{t("reviewer.decision_success_title", "Review Decision Recorded")}</h2>
           <p className="text-[#66717C] text-sm leading-relaxed max-w-md mx-auto">
-            Your clearance decision has been saved and officially logged in the application trail.
+            {t("reviewer.decision_success_desc", "Your decision has been logged and the case history has been updated.")}
           </p>
         </div>
       </div>
@@ -199,44 +199,44 @@ export function ReviewerWorkspace({
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
-        title="Reviewer Workspace"
+        title={t("reviewer.title", "Reviewer Workspace & Decision Cockpit")}
         subtitle={`${detail.project_title ?? "Clearance Application"} • ${detail.applicant_name ?? ""}`}
-        breadcrumb="Case Review"
+        breadcrumb={t("nav.group_case_review", "Case Review")}
         actions={<StatusBadge value={detail.status} />}
       />
 
-      {/* ── Top Status Strip (4 Medium Proportional Cards) ─────────────────────────────────────── */}
+      {/* ── Top Status Strip ─────────────────────────────────────── */}
       <div className="grid gap-3.5 grid-cols-2 sm:grid-cols-4">
-        <Tile label="Application Status">
+        <Tile label={t("details.overall_status", "Application Status")}>
           <StatusBadge value={detail.status} />
         </Tile>
-        <Tile label="Advisory Recommendation">
+        <Tile label={t("details.ai_recommendation", "Advisory Recommendation")}>
           <RecommendationBadge value={detail.ai_recommendation} />
         </Tile>
-        <Tile label="Assessed Risk Level">
+        <Tile label={t("common.priority", "Assessed Risk Level")}>
           <RiskBadge value={pred?.prediction_class} />
         </Tile>
-        <Tile label="Case Review Priority">
+        <Tile label={t("common.priority", "Case Review Priority")}>
           <span className={`text-sm font-bold ${priority.color}`}>{priority.label}</span>
         </Tile>
       </div>
 
-      {/* ── Main Workspace Grid (Balanced 2-Columns, No Empty Gaps) ──────────────────────────────── */}
+      {/* ── Main Workspace Grid ──────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-[1fr_390px] items-start">
 
-        {/* ── Left Column: Primary Case Findings & Nav Cards ───────────────────────── */}
+        {/* ── Left Column ───────────────────────── */}
         <div className="space-y-6">
 
-          {/* "Why This Needs Review" Section (Clean, User-Friendly & Human-Readable) */}
+          {/* "Why This Needs Review" Section */}
           <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-[#F8F9FA]">
               <div className="flex items-center gap-2.5">
                 <AlertTriangle size={16} className="text-[#B45309]" />
-                <h2 className="text-sm font-bold text-[#0A243F]">Why This Case Needs Review</h2>
+                <h2 className="text-sm font-bold text-[#0A243F]">{t("reviewer.prompt_title", "Why This Case Needs Review")}</h2>
               </div>
               {topIssues.length > 0 && (
                 <span className="rounded-full bg-[#FFFBEB] border border-[#FDE68A] px-2.5 py-0.5 text-xs font-bold text-[#B45309]">
-                  {topIssues.length} Observation{topIssues.length > 1 ? "s" : ""}
+                  {topIssues.length} {t("validation.kpi_contradictions", "Observations")}
                 </span>
               )}
             </div>
@@ -246,7 +246,7 @@ export function ReviewerWorkspace({
                 <div className="flex items-center gap-3 p-3.5 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA]">
                   <CheckCircle2 size={16} className="text-[#0A243F] shrink-0" />
                   <p className="text-xs text-[#071A2B] font-medium">
-                    All automated compliance checks have been verified. Review details and confirm decision below.
+                    {t("reviewer.prompt_desc", "Automated compliance checks completed. Review findings and record decision below.")}
                   </p>
                 </div>
               ) : (
@@ -286,31 +286,31 @@ export function ReviewerWorkspace({
           <div className="space-y-3">
             <NavCard
               icon={<BookOpen size={17} />}
-              title="Scheme &amp; Policy Evidence"
+              title={t("details.tab_evidence", "Scheme & Policy Evidence")}
               count={meaningfulEvidence.length}
-              countLabel="Guidelines"
-              summary="View applicable statutory scheme guidelines and cross-referenced evidence."
-              action="Open Evidence"
+              countLabel={t("details.tab_evidence", "Guidelines")}
+              summary={t("details.scheme", "View applicable statutory scheme guidelines and cross-referenced evidence.")}
+              action={t("common.details", "Open Evidence")}
               onNavigate={() => onNavigate?.("details")}
             />
 
             <NavCard
               icon={<CheckCircle2 size={17} />}
-              title="Compliance Validation"
+              title={t("validation.title", "Compliance Validation")}
               count={fails.length + warns.length}
-              countLabel={`Issue${(fails.length + warns.length) !== 1 ? "s" : ""}`}
-              summary={`${detail.validation_results.length} total checks evaluated across applicant data and documents.`}
-              action="Open Validation"
+              countLabel={t("validation.kpi_contradictions", "Issues")}
+              summary={`${detail.validation_results.length} ${t("validation.kpi_total", "total checks evaluated across applicant data and documents.")}`}
+              action={t("common.details", "Open Validation")}
               onNavigate={() => onNavigate?.("validation")}
             />
 
             <NavCard
               icon={<BarChart3 size={17} />}
-              title="Clearance Assessment &amp; Advisory"
+              title={t("scoring.title", "Clearance Assessment & Advisory")}
               count={confidence ? `${Math.round(confidence * 100)}%` : undefined}
-              countLabel="Confidence"
-              summary="Inspect assessed risk index, confidence metrics, and clearance recommendations."
-              action="Open Assessment"
+              countLabel={t("scoring.card_confidence", "Confidence")}
+              summary={t("scoring.subtitle", "Inspect assessed risk index, confidence metrics, and clearance recommendations.")}
+              action={t("common.details", "Open Assessment")}
               onNavigate={() => onNavigate?.("scoring")}
             />
           </div>
@@ -320,9 +320,9 @@ export function ReviewerWorkspace({
             <div className="px-6 py-3.5 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-[#D5A51A]" />
-                <h3 className="text-xs font-bold text-[#0A243F]">Was this advisory assessment helpful?</h3>
+                <h3 className="text-xs font-bold text-[#0A243F]">{t("reviewer.prompt_title", "Was this advisory assessment helpful?")}</h3>
               </div>
-              <span className="text-[10px] font-semibold text-[#66717C]">Quality feedback</span>
+              <span className="text-[10px] font-semibold text-[#66717C]">{t("scoring.card_recommendation", "Quality feedback")}</span>
             </div>
             <form onSubmit={handleFeedback} className="p-5 space-y-3.5">
               <div className="flex gap-2.5">
@@ -339,14 +339,14 @@ export function ReviewerWorkspace({
                         : "border-[#E5E7EB] bg-white text-[#66717C] hover:bg-[#F8F9FA]"
                     }`}
                   >
-                    {v === "yes" ? "✓ Yes, helpful" : "✕ Not helpful"}
+                    {v === "yes" ? `✓ ${t("common.passed", "Yes, helpful")}` : `✕ ${t("common.failed", "Not helpful")}`}
                   </button>
                 ))}
               </div>
               <textarea
                 rows={2}
                 className="form-input resize-none text-xs"
-                placeholder="Optional reviewer notes or suggestions…"
+                placeholder={t("reviewer.notes_placeholder", "Optional reviewer notes or suggestions…")}
                 value={feedbackComment}
                 onChange={e => setFeedbackComment(e.target.value)}
               />
@@ -355,7 +355,7 @@ export function ReviewerWorkspace({
                 disabled={busy || feedbackHelpful === null}
                 className="w-full rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] py-2 text-xs font-bold text-[#0A243F] hover:bg-[#0A243F] hover:text-white transition disabled:opacity-40"
               >
-                Submit Feedback
+                {t("common.confirm", "Submit Feedback")}
               </button>
             </form>
           </div>
@@ -366,7 +366,7 @@ export function ReviewerWorkspace({
           {/* Assessment Confidence Card */}
           {confidence && (
             <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-xs text-center space-y-2">
-              <p className="text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Assessment Confidence</p>
+              <p className="text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("scoring.card_confidence", "Assessment Confidence")}</p>
               <p className="text-3xl font-black text-[#0A243F] leading-none">{pct(confidence)}</p>
               <div className="h-1.5 rounded-full bg-[#F8F9FA] border border-[#E5E7EB] overflow-hidden mx-6 mt-2">
                 <div className="h-full rounded-full bg-[#0A243F] transition-all duration-500" style={{ width: `${confidence * 100}%` }} />
@@ -379,15 +379,15 @@ export function ReviewerWorkspace({
             <div className="px-6 py-4 border-b border-[#E5E7EB] bg-[#0A243F] text-white flex items-center gap-2.5">
               <UserCheck size={17} className="text-[#D5A51A]" />
               <div>
-                <h2 className="text-sm font-bold text-white">Final Reviewer Decision</h2>
-                <p className="text-[11px] text-slate-300">Officially logged to clearance record.</p>
+                <h2 className="text-sm font-bold text-white">{t("reviewer.decision_header", "Official Reviewer Decision")}</h2>
+                <p className="text-[11px] text-slate-300">{t("reviewer.decision_sub", "Officially recorded and committed to audit log.")}</p>
               </div>
             </div>
 
             <form onSubmit={handleDecision} className="p-6 space-y-5">
               {detail.ai_recommendation && (
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5">
-                  <span className="text-xs font-bold text-[#B45309]">Advisory Recommendation:</span>
+                  <span className="text-xs font-bold text-[#B45309]">{t("details.ai_recommendation", "Advisory Recommendation")}:</span>
                   <RecommendationBadge value={detail.ai_recommendation} />
                 </div>
               )}
@@ -413,13 +413,13 @@ export function ReviewerWorkspace({
               {isOverride && (
                 <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3.5 space-y-2">
                   <p className="text-xs font-bold text-[#B45309] flex items-center gap-1.5">
-                    <AlertTriangle size={13} /> Decision differs from advisory recommendation
+                    <AlertTriangle size={13} /> {t("reviewer.override_mandatory", "Override Reason (Required)")}
                   </p>
                   <textarea
                     rows={2}
                     required
                     className="form-input resize-none text-xs"
-                    placeholder="Provide brief justification for decision…"
+                    placeholder={t("reviewer.override_placeholder", "Explain why you are overriding the automated recommendation...")}
                     value={overrideReason}
                     onChange={e => setOverrideReason(e.target.value)}
                   />
@@ -429,12 +429,12 @@ export function ReviewerWorkspace({
               {/* Reviewer Notes */}
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-bold text-[#66717C] uppercase tracking-wider mb-1.5">
-                  <MessageSquare size={12} /> Decision Notes &amp; Conditions
+                  <MessageSquare size={12} /> {t("reviewer.notes_label", "Reviewer Comments & Assessment Notes")}
                 </label>
                 <textarea
                   rows={3}
                   className="form-input resize-none text-xs"
-                  placeholder="Official comments, terms, or notes attached to this application…"
+                  placeholder={t("reviewer.notes_placeholder", "Provide specific findings, rationale, and instructions for next steps...")}
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                 />
@@ -443,7 +443,7 @@ export function ReviewerWorkspace({
               {/* Officer Authority Notice */}
               <div className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] px-3.5 py-2.5">
                 <ShieldCheck size={15} className="text-[#0A243F] shrink-0" />
-                <p className="text-xs text-[#071A2B] font-semibold">Authorised Reviewer Sign-Off</p>
+                <p className="text-xs text-[#071A2B] font-semibold">{t("common.app_tagline", "Authorised Reviewer Sign-Off")}</p>
               </div>
 
               <button
@@ -451,7 +451,7 @@ export function ReviewerWorkspace({
                 disabled={busy}
                 className="w-full rounded-xl bg-[#0A243F] py-3.5 text-sm font-bold text-white hover:bg-[#0d2f50] active:scale-[0.98] transition shadow-xs disabled:opacity-50"
               >
-                {busy ? "Recording Decision…" : "Submit Official Decision"}
+                {busy ? t("common.processing", "Recording Decision…") : t("reviewer.submit_btn", "Submit Final Decision")}
               </button>
             </form>
           </div>
@@ -464,7 +464,7 @@ export function ReviewerWorkspace({
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#0A243F] py-3 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs"
             >
               <Mail size={15} className="text-[#D5A51A]" />
-              <span>Email Report</span>
+              <span>{t("common.email_report", "Email Report")}</span>
             </button>
 
             <button
@@ -473,7 +473,7 @@ export function ReviewerWorkspace({
               className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-2.5 text-xs font-bold text-[#0A243F] hover:bg-[#F8F9FA] hover:border-[#0A243F] transition shadow-2xs"
             >
               <Copy size={14} className="text-[#0A243F]" />
-              <span>Generate &amp; Copy Conclusion Report</span>
+              <span>{t("common.copy_report", "Generate & Copy Conclusion Report")}</span>
             </button>
           </div>
         </div>
@@ -573,7 +573,7 @@ function buildConclusion(
 
 /* ── Conclusion Modal ──────────────────────────────────────────────── */
 function ConclusionModal({
-  detail, topIssues, keyFindings, copied, onCopy, onClose,
+  topIssues: _topIssues, keyFindings: _keyFindings, detail, copied, onCopy, onClose,
 }: {
   detail: ApplicationDetail;
   topIssues: { validation_type: string; status: string; message: string }[];
@@ -582,7 +582,8 @@ function ConclusionModal({
   onCopy: () => void;
   onClose: () => void;
 }) {
-  const text = buildConclusion(detail, topIssues, keyFindings);
+  const { t } = useTranslation();
+  const text = buildConclusion(detail, _topIssues, _keyFindings);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0A243F]/60 backdrop-blur-sm animate-fade-in font-sans">
       <div className="w-full max-w-xl rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl flex flex-col max-h-[90vh] animate-slide-up overflow-hidden">
@@ -591,8 +592,8 @@ function ConclusionModal({
           <div className="flex items-center gap-2.5">
             <Mail size={17} className="text-[#D5A51A]" />
             <div>
-              <p className="text-sm font-bold text-white">Clearance Review Conclusion</p>
-              <p className="text-[11px] text-slate-300">Copy text to share with applicant or attach to formal record.</p>
+              <p className="text-sm font-bold text-white">{t("common.copy_report", "Clearance Review Conclusion")}</p>
+              <p className="text-[11px] text-slate-300">{t("reviewer.decision_sub", "Copy text to share with applicant or attach to formal record.")}</p>
             </div>
           </div>
           <button
@@ -617,14 +618,14 @@ function ConclusionModal({
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold text-[#66717C] hover:text-[#0A243F] transition"
           >
-            Close
+            {t("common.close", "Close")}
           </button>
           <button
             onClick={onCopy}
             className="inline-flex items-center gap-2 rounded-xl bg-[#0A243F] px-5 py-2 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs"
           >
             <Copy size={13} className="text-[#D5A51A]" />
-            {copied ? "Copied to Clipboard!" : "Copy Report"}
+            {copied ? t("common.copied", "Copied to Clipboard!") : t("common.copy", "Copy Report")}
           </button>
         </div>
       </div>
@@ -640,6 +641,7 @@ function MailReportModal({
   detail: ApplicationDetail;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const initialEmail = (detail.form_data?.applicant_email as string | undefined) || "";
   const [email, setEmail]         = useState(initialEmail);
   const [sending, setSending]     = useState(false);
@@ -648,16 +650,16 @@ function MailReportModal({
   async function handleSend(e: FormEvent) {
     e.preventDefault();
     if (!email || !email.includes("@")) {
-      setStatusMsg({ type: "error", msg: "Please enter a valid recipient email address." });
+      setStatusMsg({ type: "error", msg: t("login.invalid_credentials", "Please enter a valid recipient email address.") });
       return;
     }
     setSending(true);
     setStatusMsg(null);
     try {
       const res = await api.sendReportEmail(detail.id, email);
-      setStatusMsg({ type: "success", msg: `Clearance report emailed successfully to ${res.recipient_email}!` });
+      setStatusMsg({ type: "success", msg: `${t("common.email_report", "Clearance report emailed successfully to")} ${res.recipient_email}!` });
     } catch (err) {
-      setStatusMsg({ type: "error", msg: err instanceof Error ? err.message : "Failed to send email report." });
+      setStatusMsg({ type: "error", msg: err instanceof Error ? err.message : t("common.error", "Failed to send email report.") });
     } finally {
       setSending(false);
     }
@@ -671,7 +673,7 @@ function MailReportModal({
           <div className="flex items-center gap-2.5">
             <Mail size={18} className="text-[#D5A51A]" />
             <div>
-              <p className="text-sm font-bold text-white">Email Report</p>
+              <p className="text-sm font-bold text-white">{t("common.email_report", "Email Report")}</p>
             </div>
           </div>
           <button
@@ -687,7 +689,7 @@ function MailReportModal({
         <form onSubmit={handleSend} className="p-6 space-y-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-[#66717C] uppercase tracking-wider">
-              Recipient Email Address
+              {t("details.applicant_email", "Recipient Email Address")}
             </label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -695,14 +697,14 @@ function MailReportModal({
                 type="email"
                 required
                 className="form-input pl-9 text-xs"
-                placeholder="applicant@organization.gov.in"
+                placeholder={t("new_app.applicant_email_placeholder", "applicant@organization.gov.in")}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
             </div>
             {initialEmail && (
               <p className="text-[11px] text-slate-400">
-                Pre-filled from application submission data.
+                {t("new_app.applicant_email_label", "Pre-filled from application submission data.")}
               </p>
             )}
           </div>
@@ -725,7 +727,7 @@ function MailReportModal({
               onClick={onClose}
               className="px-4 py-2 text-xs font-semibold text-[#66717C] hover:text-[#0A243F]"
             >
-              Close
+              {t("common.close", "Close")}
             </button>
             <button
               type="submit"
@@ -735,12 +737,12 @@ function MailReportModal({
               {sending ? (
                 <>
                   <Loader2 size={14} className="animate-spin text-[#D5A51A]" />
-                  Sending Email…
+                  {t("common.processing", "Sending Email…")}
                 </>
               ) : (
                 <>
                   <Send size={14} className="text-[#D5A51A]" />
-                  Send Report
+                  {t("common.send", "Send Report")}
                 </>
               )}
             </button>

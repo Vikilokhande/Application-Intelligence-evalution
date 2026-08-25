@@ -1,19 +1,21 @@
 // src/components/ui/RecommendationBadge.tsx
 import { CheckCircle2, HelpCircle, XCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type RecValue = string | null | undefined;
 
-const REC_CONFIG: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  APPROVE:               { label: "Approve",                cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
-  APPROVED:              { label: "Approved",               cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
-  REJECT:                { label: "Reject",                 cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
-  REJECTED:              { label: "Rejected",               cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
-  REQUEST_CLARIFICATION: { label: "Clarification Required", cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
-  REVIEW_REQUIRED:       { label: "Review Required",        cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
-};
-
 export function RecommendationBadge({ value, large }: { value: RecValue; large?: boolean }) {
+  const { t } = useTranslation();
   if (!value) return <span className="text-sm text-slate-400">—</span>;
+
+  const REC_CONFIG: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
+    APPROVE:               { label: t("common.approved", "Approve"),                cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
+    APPROVED:              { label: t("common.approved", "Approved"),               cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
+    REJECT:                { label: t("common.rejected", "Reject"),                 cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
+    REJECTED:              { label: t("common.rejected", "Rejected"),               cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
+    REQUEST_CLARIFICATION: { label: t("common.clarification", "Clarification Required"), cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
+    REVIEW_REQUIRED:       { label: t("common.clarification", "Review Required"),        cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
+  };
 
   const cfg = REC_CONFIG[value.toUpperCase()] ?? {
     label: value.replaceAll("_", " "),
@@ -39,3 +41,4 @@ export function RecommendationBadge({ value, large }: { value: RecValue; large?:
     </span>
   );
 }
+

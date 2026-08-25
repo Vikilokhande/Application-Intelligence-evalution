@@ -1,16 +1,18 @@
 // src/components/ui/RiskBadge.tsx
 import { AlertTriangle, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type RiskLevel = "LOW_RISK" | "MEDIUM_RISK" | "HIGH_RISK" | string | null | undefined;
 
-const RISK_CONFIG = {
-  LOW_RISK:    { label: "Low Risk",    cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: ShieldCheck },
-  MEDIUM_RISK: { label: "Medium Risk", cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: AlertTriangle },
-  HIGH_RISK:   { label: "High Risk",   cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: ShieldAlert },
-} as const;
-
 export function RiskBadge({ value, large }: { value: RiskLevel; large?: boolean }) {
+  const { t } = useTranslation();
   if (!value) return <span className="text-sm text-slate-400">—</span>;
+
+  const RISK_CONFIG = {
+    LOW_RISK:    { label: t("dashboard.priority_low", "Low Risk"),    cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: ShieldCheck },
+    MEDIUM_RISK: { label: t("dashboard.priority_medium", "Medium Risk"), cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: AlertTriangle },
+    HIGH_RISK:   { label: t("dashboard.priority_high", "High Risk"),   cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: ShieldAlert },
+  } as const;
 
   const cfg = RISK_CONFIG[value as keyof typeof RISK_CONFIG] ?? {
     label: value.replaceAll("_", " "),
@@ -36,3 +38,4 @@ export function RiskBadge({ value, large }: { value: RiskLevel; large?: boolean 
     </span>
   );
 }
+

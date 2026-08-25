@@ -1,10 +1,8 @@
 // SchemeRules.tsx — Governance: Schemes & Eligibility Rules.
 // Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C), Soft Gray (#E5E7EB).
-// Free of green/neon colors. Clean, human-readable rules and compact layout.
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
-  Check,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -16,19 +14,12 @@ import {
   ShieldCheck,
   Layers,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AlertBanner, EmptyState, PageHeader } from "../components/ui";
 import { KnowledgeSearch } from "../components/KnowledgeSearch";
 import type { SchemeRead } from "../types/api";
 
 const SEVERITY_OPTIONS = ["ERROR", "WARNING", "INFO"] as const;
-const RULE_TYPE_OPTIONS = [
-  { value: "max_value", label: "Maximum Value Limit" },
-  { value: "min_value", label: "Minimum Value Threshold" },
-  { value: "required_field", label: "Required Mandatory Field" },
-  { value: "required_documents", label: "Required Clearance Documents" },
-  { value: "in_set", label: "Permitted Value List" },
-  { value: "boolean", label: "Yes/No Compliance Requirement" },
-];
 
 function humanRuleType(ruleType: string): { icon: ReactNode; label: string } {
   const t = ruleType.toLowerCase();
@@ -85,6 +76,7 @@ export function SchemeRules({
   onCreateRule: (schemeId: string, payload: Record<string, unknown>) => Promise<void>;
   onDeleteRule?: (schemeId: string, ruleId: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [selectedScheme, setSelectedScheme] = useState(0);
   const [showAddScheme, setShowAddScheme] = useState(false);
   const [showAddRule, setShowAddRule] = useState(false);
@@ -93,6 +85,15 @@ export function SchemeRules({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedRule, setExpandedRule] = useState<string | null>(null);
+
+  const RULE_TYPE_OPTIONS = [
+    { value: "max_value", label: "Maximum Value Limit" },
+    { value: "min_value", label: "Minimum Value Threshold" },
+    { value: "required_field", label: "Required Mandatory Field" },
+    { value: "required_documents", label: "Required Clearance Documents" },
+    { value: "in_set", label: "Permitted Value List" },
+    { value: "boolean", label: "Yes/No Compliance Requirement" },
+  ];
 
   const [schemeName, setSchemeName] = useState("");
   const [schemeCode, setSchemeCode] = useState("");
@@ -188,22 +189,22 @@ export function SchemeRules({
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
-        title="Schemes &amp; Rules"
-        subtitle="Manage official environmental schemes, eligibility limits, and compliance rules."
-        breadcrumb="Governance"
+        title={t("schemes.title", "Schemes & Governance Rules")}
+        subtitle={t("schemes.subtitle", "Statutory clearance requirements, document requirements, and parameter rules")}
+        breadcrumb={t("nav.group_governance", "Governance")}
         actions={
           <div className="flex flex-wrap gap-2.5">
             <button
               onClick={() => { setShowAddScheme(v => !v); setShowAddRule(false); }}
               className="inline-flex items-center gap-1.5 rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-xs font-bold text-[#0A243F] hover:bg-[#F8F9FA] hover:border-[#0A243F] transition shadow-2xs"
             >
-              <PlusCircle size={14} className="text-[#D5A51A]" /> Add Scheme
+              <PlusCircle size={14} className="text-[#D5A51A]" /> {t("schemes.create_btn", "Create Scheme")}
             </button>
             <button
               onClick={() => { setShowAddRule(v => !v); setShowAddScheme(false); }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A243F] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d2f50] transition shadow-xs"
             >
-              <PlusCircle size={14} className="text-[#D5A51A]" /> Add Rule
+              <PlusCircle size={14} className="text-[#D5A51A]" /> {t("schemes.add_rule_btn", "Add Rule")}
             </button>
           </div>
         }
@@ -236,31 +237,31 @@ export function SchemeRules({
 
       {/* ── Add Scheme Form Panel ──────────────────────────── */}
       {showAddScheme && (
-        <FormPanel title="Add Environmental Scheme" subtitle="Provide scheme parameters and metadata. Rules can be configured after creation.">
+        <FormPanel title={t("schemes.create_btn", "Add Environmental Scheme")} subtitle="Provide scheme parameters and metadata. Rules can be configured after creation.">
           <form onSubmit={handleAddScheme} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Scheme Name" required>
-                <input className="form-input text-xs" value={schemeName} onChange={e => setSchemeName(e.target.value)} placeholder="e.g. Urban Biodiversity Conservation Program" required />
+              <FormField label={t("schemes.scheme_name_label", "Scheme Name")} required>
+                <input className="form-input text-xs" value={schemeName} onChange={e => setSchemeName(e.target.value)} placeholder={t("schemes.scheme_name_placeholder", "e.g. National Green Hydrogen Mission")} required />
               </FormField>
-              <FormField label="Scheme Code">
-                <input className="form-input text-xs" value={schemeCode} onChange={e => setSchemeCode(e.target.value)} placeholder="e.g. UBCP_2026" />
+              <FormField label={t("schemes.scheme_code_label", "Scheme Code")}>
+                <input className="form-input text-xs" value={schemeCode} onChange={e => setSchemeCode(e.target.value)} placeholder="e.g. NGHM-2026" />
               </FormField>
             </div>
-            <FormField label="Purpose & Scope" required>
-              <textarea className="form-input text-xs min-h-[70px]" value={schemePurpose} onChange={e => setSchemePurpose(e.target.value)} placeholder="Detailed purpose and statutory scope of this environmental scheme…" required />
+            <FormField label={t("schemes.scheme_desc_label", "Scheme Description & Scope")} required>
+              <textarea className="form-input text-xs min-h-[70px]" value={schemePurpose} onChange={e => setSchemePurpose(e.target.value)} placeholder={t("schemes.scheme_desc_placeholder", "Describe the statutory purpose and guidelines...")} required />
             </FormField>
             <div className="grid gap-4 sm:grid-cols-3">
-              <FormField label="Eligibility Criteria">
+              <FormField label={t("details.tab_overview", "Eligibility Criteria")}>
                 <textarea className="form-input text-xs min-h-[80px]" value={schemeEligibility} onChange={e => setSchemeEligibility(e.target.value)} placeholder="Registered Entity&#10;Municipal Corporation&#10;State Department" />
               </FormField>
-              <FormField label="Required Documents">
+              <FormField label={t("details.tab_documents", "Required Documents")}>
                 <textarea className="form-input text-xs min-h-[80px]" value={schemeDocuments} onChange={e => setSchemeDocuments(e.target.value)} placeholder="EIA Clearance Report&#10;Project Budget&#10;Land Certificate" />
               </FormField>
-              <FormField label="Project Categories">
+              <FormField label={t("details.project_cat", "Project Categories")}>
                 <textarea className="form-input text-xs min-h-[80px]" value={schemeCategories} onChange={e => setSchemeCategories(e.target.value)} placeholder="Water Conservation&#10;Afforestation&#10;Renewable Energy" />
               </FormField>
             </div>
-            <FormActions onCancel={() => setShowAddScheme(false)} busy={busy} submitLabel="Save Scheme" />
+            <FormActions onCancel={() => setShowAddScheme(false)} busy={busy} submitLabel={t("common.confirm", "Save Scheme")} />
           </form>
         </FormPanel>
       )}
@@ -273,35 +274,35 @@ export function SchemeRules({
 
           {/* Add Rule Form Panel */}
           {showAddRule && scheme && (
-            <FormPanel title={`Add Rule to ${scheme.name}`} subtitle="Configure rule parameter checks. No complex formatting required.">
+            <FormPanel title={`${t("schemes.add_rule_btn", "Add Rule to")} ${scheme.name}`} subtitle="Configure rule parameter checks. No complex formatting required.">
               <form onSubmit={handleAddRule} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Rule Name" required>
-                    <input className="form-input text-xs" value={ruleName} onChange={e => setRuleName(e.target.value)} placeholder="e.g. Maximum Total Project Cost" required />
+                  <FormField label={t("schemes.rule_name_label", "Rule Name")} required>
+                    <input className="form-input text-xs" value={ruleName} onChange={e => setRuleName(e.target.value)} placeholder={t("schemes.rule_name_placeholder", "e.g. Max Total Cost Threshold")} required />
                   </FormField>
-                  <FormField label="Rule Type" required>
+                  <FormField label={t("schemes.rule_type_label", "Rule Type")} required>
                     <select className="form-select text-xs" value={ruleType} onChange={e => setRuleType(e.target.value)}>
                       {RULE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </FormField>
                 </div>
-                <FormField label="Rule Objective">
+                <FormField label={t("schemes.rule_type_label", "Rule Objective")}>
                   <input className="form-input text-xs" value={ruleDesc} onChange={e => setRuleDesc(e.target.value)} placeholder="Describe what this compliance check validates…" />
                 </FormField>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <FormField label="Target Field">
+                  <FormField label={t("validation.col_check", "Target Field")}>
                     <input className="form-input text-xs" value={ruleField} onChange={e => setRuleField(e.target.value)} placeholder="e.g. project_cost" />
                   </FormField>
                   <FormField label={ruleValueLabel(ruleType)}>
                     <input className="form-input text-xs" value={ruleValue} onChange={e => setRuleValue(e.target.value)} placeholder={ruleValuePlaceholder(ruleType)} />
                   </FormField>
-                  <FormField label="Severity">
+                  <FormField label={t("schemes.rule_severity_label", "Severity")}>
                     <select className="form-select text-xs" value={severity} onChange={e => setSeverity(e.target.value as typeof severity)}>
                       {SEVERITY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </FormField>
                 </div>
-                <FormActions onCancel={() => setShowAddRule(false)} busy={busy} submitLabel="Save Rule" />
+                <FormActions onCancel={() => setShowAddRule(false)} busy={busy} submitLabel={t("common.confirm", "Save Rule")} />
               </form>
             </FormPanel>
           )}
@@ -312,7 +313,7 @@ export function SchemeRules({
               <div className="flex items-center gap-2">
                 <Layers size={16} className="text-[#0A243F]" />
                 <h3 className="text-sm font-bold text-[#0A243F]">
-                  Configured Eligibility Rules {scheme ? `(${scheme.rules.length})` : ""}
+                  {t("details.tab_rules", "Configured Eligibility Rules")} {scheme ? `(${scheme.rules.length})` : ""}
                 </h3>
               </div>
               {(scheme?.rules.length ?? 0) > 2 && (
@@ -320,7 +321,7 @@ export function SchemeRules({
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#66717C]" />
                   <input
                     className="form-input w-48 py-1.5 pl-8 text-xs"
-                    placeholder="Search rules…"
+                    placeholder={t("common.search", "Search rules…")}
                     value={ruleSearch}
                     onChange={e => setRuleSearch(e.target.value)}
                   />
@@ -330,14 +331,14 @@ export function SchemeRules({
 
             {filteredRules.length === 0 && !showAddRule && (
               <EmptyState
-                title="No rules configured"
+                title={t("schemes.rules_count", "No rules configured")}
                 description={scheme ? `No rules have been configured for ${scheme.name} yet.` : "Select a scheme to view rules."}
                 action={
                   <button
                     onClick={() => setShowAddRule(true)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A243F] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d2f50]"
                   >
-                    <PlusCircle size={13} className="text-[#D5A51A]" /> Add first rule
+                    <PlusCircle size={13} className="text-[#D5A51A]" /> {t("schemes.add_rule_btn", "Add first rule")}
                   </button>
                 }
               />
@@ -365,7 +366,7 @@ export function SchemeRules({
                             {label}
                           </span>
                           <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${rule.active ? "border border-[#0A243F]/20 bg-[#0A243F]/5 text-[#0A243F]" : "border border-[#E5E7EB] bg-[#F8F9FA] text-[#66717C]"}`}>
-                            {rule.active ? "Active" : "Inactive"}
+                            {rule.active ? t("common.active", "Active") : t("common.pending", "Inactive")}
                           </span>
                         </div>
                         <p className="mt-0.5 text-xs text-[#66717C] truncate">{requirement}</p>
@@ -375,7 +376,7 @@ export function SchemeRules({
                           <button
                             onClick={async e => { e.stopPropagation(); await onDeleteRule(scheme!.id, rule.id); }}
                             className="text-[#66717C] transition hover:text-rose-600 p-1"
-                            title="Delete rule"
+                            title={t("details.delete_app_btn", "Delete rule")}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -387,9 +388,9 @@ export function SchemeRules({
                     {open && (
                       <div className="border-t border-[#E5E7EB] px-5 py-3 bg-[#F8F9FA]">
                         <div className="grid gap-3 rounded-xl border border-[#E5E7EB] bg-white p-3.5 sm:grid-cols-3 text-xs">
-                          <RuleInfo label="Check Scope" value={ruleDescForType(rule.rule_type)} />
-                          <RuleInfo label="Statutory Requirement" value={requirement} />
-                          <RuleInfo label="Status" value={rule.active ? "Active Rule" : "Inactive"} />
+                          <RuleInfo label={t("details.case_info", "Check Scope")} value={ruleDescForType(rule.rule_type)} />
+                          <RuleInfo label={t("details.tab_evidence", "Statutory Requirement")} value={requirement} />
+                          <RuleInfo label={t("validation.col_status", "Status")} value={rule.active ? "Active Rule" : "Inactive"} />
                         </div>
                       </div>
                     )}
@@ -404,8 +405,8 @@ export function SchemeRules({
         <div className="space-y-4">
           <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs overflow-hidden">
             <div className="border-b border-[#E5E7EB] bg-[#F8F9FA] px-5 py-4">
-              <h3 className="text-sm font-bold text-[#0A243F]">Search Scheme Guidelines</h3>
-              <p className="mt-0.5 text-xs text-[#66717C]">Query statutory limits, eligibility guidelines, and document rules.</p>
+              <h3 className="text-sm font-bold text-[#0A243F]">{t("details.tab_evidence", "Search Scheme Guidelines")}</h3>
+              <p className="mt-0.5 text-xs text-[#66717C]">{t("schemes.subtitle", "Query statutory limits, eligibility guidelines, and document rules.")}</p>
             </div>
             <div className="p-5">
               <KnowledgeSearch />
@@ -419,6 +420,7 @@ export function SchemeRules({
 
 /* ── Sub-Components ───────────────────────────────────────────────── */
 function SchemeCard({ scheme }: { scheme: SchemeRead }) {
+  const { t } = useTranslation();
   const configuration = scheme.configuration ?? {};
   const purpose = String(configuration.purpose ?? scheme.description ?? "Purpose not provided.");
   const eligibility = toList(configuration.eligibility);
@@ -432,13 +434,13 @@ function SchemeCard({ scheme }: { scheme: SchemeRead }) {
           <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-[#66717C]">{scheme.code}</p>
         </div>
         <span className="rounded-full border border-[#0A243F]/20 bg-[#0A243F]/5 px-2.5 py-0.5 text-xs font-bold text-[#0A243F]">
-          {scheme.active ? "Active Scheme" : "Inactive"}
+          {scheme.active ? t("common.active", "Active Scheme") : t("common.pending", "Inactive")}
         </span>
       </div>
       <div className="grid gap-4 p-6 sm:grid-cols-3">
-        <SchemeInfo label="Scheme Purpose" value={purpose} />
-        <SchemeInfo label="Eligible Entities" value={eligibility.length ? eligibility.join(", ") : "Not configured"} />
-        <SchemeInfo label="Mandatory Documents" value={docs.length ? docs.join(", ") : "Not configured"} />
+        <SchemeInfo label={t("schemes.scheme_desc_label", "Scheme Purpose")} value={purpose} />
+        <SchemeInfo label={t("details.tab_overview", "Eligible Entities")} value={eligibility.length ? eligibility.join(", ") : t("common.no_data", "Not configured")} />
+        <SchemeInfo label={t("details.tab_documents", "Mandatory Documents")} value={docs.length ? docs.join(", ") : t("common.no_data", "Not configured")} />
       </div>
     </div>
   );
@@ -457,6 +459,7 @@ function FormPanel({ title, subtitle, children }: { title: string; subtitle: str
 }
 
 function FormActions({ onCancel, busy, submitLabel }: { onCancel: () => void; busy: boolean; submitLabel: string }) {
+  const { t } = useTranslation();
   return (
     <div className="flex justify-end gap-3 pt-2">
       <button
@@ -464,14 +467,14 @@ function FormActions({ onCancel, busy, submitLabel }: { onCancel: () => void; bu
         onClick={onCancel}
         className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-xs font-semibold text-[#66717C] hover:bg-[#F8F9FA]"
       >
-        Cancel
+        {t("common.cancel", "Cancel")}
       </button>
       <button
         type="submit"
         disabled={busy}
         className="rounded-xl bg-[#0A243F] px-5 py-2 text-xs font-bold text-white hover:bg-[#0d2f50] disabled:opacity-50 shadow-xs"
       >
-        {busy ? "Saving…" : submitLabel}
+        {busy ? t("common.processing", "Saving…") : submitLabel}
       </button>
     </div>
   );

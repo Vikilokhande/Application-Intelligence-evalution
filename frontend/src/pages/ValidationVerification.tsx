@@ -1,6 +1,5 @@
 // ValidationVerification.tsx — Validation Results.
 // Color Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
-// No neon colors. Medium-sized proportional KPI cards. User-friendly tables.
 import { useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -14,6 +13,7 @@ import {
   FileCheck,
   Layers,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { EmptyState, PageHeader } from "../components/ui";
 import type { ApplicationDetail, ValidationResult } from "../types/api";
 
@@ -112,14 +112,15 @@ function getActual(v: ValidationResult): string {
 }
 
 export function ValidationVerification({ detail }: { detail: ApplicationDetail | null }) {
+  const { t } = useTranslation();
   const [showAll, setShowAll] = useState(false);
 
   if (!detail) {
     return (
       <EmptyState
         icon={<ShieldCheck size={24} />}
-        title="No application selected"
-        description="Select an application from the Dashboard to view validation checks."
+        title={t("audit.empty_title", "No application selected")}
+        description={t("audit.empty_desc", "Select an application from the Dashboard to view validation checks.")}
       />
     );
   }
@@ -140,34 +141,34 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
-        title="Validation Results"
-        subtitle={`Compliance check summary for: ${detail.project_title ?? "Selected Application"}`}
-        breadcrumb="Case Review"
+        title={t("validation.title", "Validation & Verification")}
+        subtitle={`${t("validation.subtitle", "Automated rules, registry verification, and contradiction detection")} — ${detail.project_title ?? ""}`}
+        breadcrumb={t("nav.group_case_review", "Case Review")}
       />
 
       {/* ── Medium-Sized Proportional KPI Summary Row ─────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <KpiMedium
           icon={<CheckCircle2 size={16} />}
-          label="Passed Checks"
+          label={t("validation.kpi_passed", "Passed Checks")}
           count={passes.length}
           accent="navy"
         />
         <KpiMedium
           icon={<AlertTriangle size={16} />}
-          label="Need Verification"
+          label={t("validation.kpi_warnings", "Need Verification")}
           count={warnings.length}
           accent="gold"
         />
         <KpiMedium
           icon={<XCircle size={16} />}
-          label="Failed Checks"
+          label={t("validation.kpi_contradictions", "Failed Checks")}
           count={fails.length}
           accent="rose"
         />
         <KpiMedium
           icon={<HelpCircle size={16} />}
-          label="Skipped Checks"
+          label={t("common.pending", "Skipped Checks")}
           count={skipped.length}
           accent="slate"
         />
@@ -179,19 +180,19 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
           <div className="px-6 py-4 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <Layers size={16} className="text-[#0A243F]" />
-              <h2 className="text-sm font-bold text-[#0A243F]">Cross-Document Verification</h2>
+              <h2 className="text-sm font-bold text-[#0A243F]">{t("validation.tab_cross_doc", "Cross-Document Verification")}</h2>
             </div>
-            <span className="text-xs font-semibold text-[#66717C]">{crossDocResults.length} Consistency Checks</span>
+            <span className="text-xs font-semibold text-[#66717C]">{crossDocResults.length} {t("validation.tab_cross_doc", "Consistency Checks")}</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                  <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Verification Check</th>
-                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden sm:table-cell">Document A Value</th>
-                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden md:table-cell">Document B Value</th>
-                  <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Status</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_check", "Verification Check")}</th>
+                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden sm:table-cell">{t("validation.col_doc_a", "Document A Value")}</th>
+                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden md:table-cell">{t("validation.col_doc_b", "Document B Value")}</th>
+                  <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_status", "Status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E7EB]">
@@ -220,19 +221,19 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
           <div className="px-6 py-4 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <FileCheck size={16} className="text-[#0A243F]" />
-              <h2 className="text-sm font-bold text-[#0A243F]">Application Field Verification</h2>
+              <h2 className="text-sm font-bold text-[#0A243F]">{t("validation.tab_rules", "Application Field Verification")}</h2>
             </div>
-            <span className="text-xs font-semibold text-[#66717C]">{fieldResults.length} Fields Checked</span>
+            <span className="text-xs font-semibold text-[#66717C]">{fieldResults.length} {t("validation.tab_rules", "Fields Checked")}</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                  <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Field Name</th>
-                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden sm:table-cell">Extracted Data</th>
-                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden md:table-cell">Scheme Guideline Limit</th>
-                  <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Outcome</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_check", "Field Name")}</th>
+                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden sm:table-cell">{t("validation.col_extracted", "Extracted Data")}</th>
+                  <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden md:table-cell">{t("validation.col_guideline", "Scheme Guideline Limit")}</th>
+                  <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_status", "Outcome")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E7EB]">
@@ -259,10 +260,10 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
         >
           <div className="flex items-center gap-2.5">
             <ShieldCheck size={17} className="text-[#0A243F]" />
-            <span>Complete Checklist ({all.length} Automated Checks)</span>
+            <span>{t("validation.tab_all", "Complete Checklist")} ({all.length} {t("validation.kpi_total", "Automated Checks")})</span>
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-[#66717C]">
-            <span>{showAll ? "Hide Complete Checklist" : "View Complete Checklist"}</span>
+            <span>{showAll ? t("common.collapse", "Hide Complete Checklist") : t("common.expand", "View Complete Checklist")}</span>
             {showAll ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </div>
         </button>
@@ -273,9 +274,9 @@ export function ValidationVerification({ detail }: { detail: ApplicationDetail |
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                    <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Check Name</th>
-                    <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden lg:table-cell">Findings &amp; Remarks</th>
-                    <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">Status</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_check", "Check Name")}</th>
+                    <th className="text-left px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider hidden lg:table-cell">{t("validation.col_rationale", "Findings & Remarks")}</th>
+                    <th className="text-center px-5 py-3 text-[11px] font-bold text-[#66717C] uppercase tracking-wider">{t("validation.col_status", "Status")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
@@ -359,25 +360,26 @@ function KpiMedium({
 
 /* ── Result Pill (Muted Non-Neon Colors) ─────────────────────────── */
 function ResultPill({ status }: { status: string }) {
+  const { t } = useTranslation();
   const map: Record<string, { label: string; cls: string }> = {
     PASS: {
-      label: "Passed",
+      label: t("common.passed", "Passed"),
       cls: "bg-[#0A243F]/5 text-[#0A243F] border border-[#0A243F]/20 font-bold",
     },
     FAIL: {
-      label: "Failed",
+      label: t("common.failed", "Failed"),
       cls: "bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA] font-bold",
     },
     WARN: {
-      label: "Verify",
+      label: t("common.warning", "Verify"),
       cls: "bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] font-bold",
     },
     NOT_VERIFIABLE: {
-      label: "Verify",
+      label: t("common.warning", "Verify"),
       cls: "bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] font-bold",
     },
     NOT_CHECKED: {
-      label: "Skipped",
+      label: t("common.pending", "Skipped"),
       cls: "bg-[#F8F9FA] text-[#66717C] border border-[#E5E7EB]",
     },
   };
@@ -388,3 +390,4 @@ function ResultPill({ status }: { status: string }) {
     </span>
   );
 }
+
