@@ -1,25 +1,29 @@
 import { CheckCircle2, AlertTriangle, AlertCircle, Sparkles, Clock, Info } from "lucide-react";
 
 const toneByStatus: Record<string, { tone: string; icon: typeof CheckCircle2 }> = {
-  PASS: { tone: "border-emerald-300 bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
-  SUCCESS: { tone: "border-emerald-300 bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
-  APPROVE: { tone: "border-emerald-300 bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
-  LOW_RISK: { tone: "border-emerald-300 bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
-  HUMAN_DECISION_RECORDED: { tone: "border-emerald-300 bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
+  PASS: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
+  SUCCESS: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
+  APPROVE: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
+  APPROVED: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
+  LOW_RISK: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
+  HUMAN_DECISION_RECORDED: { tone: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", icon: CheckCircle2 },
 
-  WARN: { tone: "border-amber-300 bg-amber-50 text-amber-800", icon: AlertTriangle },
-  WARNING: { tone: "border-amber-300 bg-amber-50 text-amber-800", icon: AlertTriangle },
-  MEDIUM_RISK: { tone: "border-amber-300 bg-amber-50 text-amber-800", icon: AlertTriangle },
+  WARN: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: AlertTriangle },
+  WARNING: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: AlertTriangle },
+  MEDIUM_RISK: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: AlertTriangle },
+  REQUEST_CLARIFICATION: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: AlertTriangle },
+  CLARIFICATION_REQUESTED: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: AlertTriangle },
 
-  FAIL: { tone: "border-rose-300 bg-rose-50 text-rose-800", icon: AlertCircle },
-  ERROR: { tone: "border-rose-300 bg-rose-50 text-rose-800", icon: AlertCircle },
-  PROCESSING_FAILED: { tone: "border-rose-300 bg-rose-50 text-rose-800", icon: AlertCircle },
-  HIGH_RISK: { tone: "border-rose-300 bg-rose-50 text-rose-800", icon: AlertCircle },
-  REJECT: { tone: "border-rose-300 bg-rose-50 text-rose-800", icon: AlertCircle },
+  FAIL: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
+  ERROR: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
+  PROCESSING_FAILED: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
+  HIGH_RISK: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
+  REJECT: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
+  REJECTED: { tone: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle },
 
-  AWAITING_HUMAN_REVIEW: { tone: "border-sky-300 bg-sky-50 text-sky-800", icon: Clock },
-  PROCESSING: { tone: "border-blue-300 bg-blue-50 text-blue-800", icon: Clock },
-  GENERATED_DEVELOPMENT_MODEL: { tone: "border-sky-300 bg-sky-50 text-sky-800", icon: Sparkles }
+  AWAITING_HUMAN_REVIEW: { tone: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]", icon: Clock },
+  PROCESSING: { tone: "border-[#0A2540]/20 bg-[#0A2540]/5 text-[#0A2540]", icon: Clock },
+  GENERATED_DEVELOPMENT_MODEL: { tone: "border-[#0A2540]/20 bg-[#0A2540]/5 text-[#0A2540]", icon: Sparkles }
 };
 
 export function StatusBadge({ value }: { value: string | null | undefined }) {

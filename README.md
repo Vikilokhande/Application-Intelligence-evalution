@@ -1,252 +1,172 @@
-# Application Intelligence Platform
+# DECC Environmental Review Portal & Decision Support Platform
 
-Enterprise AI application processing and evaluation platform for the Directorate of Environment & Climate Change.
+**Directorate of Environment & Climate Change (DECC) — Government of Maharashtra**  
+**Core Operating Principle**: *"AI Assists · Human Decides"*  
 
-This repository is a functional local-first vertical slice. It demonstrates intake of an application package, document intelligence, normalized profile creation, validation, deterministic rule evaluation, feature engineering, development ML scoring, evidence generation, reviewer routing, human review, audit logging, feedback capture, and analytics.
+---
 
-AI and rules are decision support only. Final approve/reject/clarification decisions are always made by an authorized human reviewer.
+## 📌 Executive Overview
 
-## Architecture Flow
+The **DECC Application Intelligence & Environmental Review Portal** is an AI-assisted evaluation and decision support platform built to modernize the statutory environmental clearance process for the Government of Maharashtra.
 
-Heterogeneous Application -> Application Intake -> Document Intelligence -> Extraction + Normalization -> Validation & Verification -> Knowledge-Based Rule Engine -> Validated Application -> Feature Engineering -> Explainable ML / AI Engine -> Decision Support & Explainability -> Intelligent Workflow Routing -> Human Review & Final Decision -> Integration & Recording -> Analytics & Reporting -> Feedback & Improvement.
+The platform streamlines application intake, document ingestion, smart optical character recognition (OCR), cross-document validation, policy knowledge retrieval (RAG), and machine learning risk scoring—while strictly retaining final clearance authority in the hands of authorized government reviewers.
 
-The runtime workflow pauses at `HUMAN_REVIEW`. There is no automatic approval or rejection node.
+---
 
-## Repository Structure
+## ✨ Key Capabilities
 
-- `backend/` FastAPI, SQLAlchemy, Alembic, LangGraph state/workflow, Chroma knowledge adapter, service modules, tests
-- `frontend/` React, TypeScript, Vite, Tailwind dashboard and reviewer workspace
-- `data/knowledge/` local scheme knowledge for Chroma-backed retrieval
-- `data/samples/` fictional sample documents for local verification
-- `data/synthetic/` synthetic application scenarios
-- `ml/` future training, evaluation, and model artifact area
-- `docs/architecture/` architecture notes
-- `docs/adr/` architecture decisions
-- `scripts/` local run and verification scripts
-- `docker/` backend/frontend container definitions
+1. **Intelligent Document Ingestion & Multi-Format OCR**: Parses text layers, tables, and scanned pages from PDFs, Word documents, Excel spreadsheets, and images using `pdfplumber` and `Tesseract OCR`.
+2. **3-Layer Deterministic Validation Engine**: Executes 33 automated compliance checks including required fields, budget caps, entity eligibility, and cross-document discrepancy spotters (flagging cost discrepancies $> ₹5,000$ or $> 2\%$).
+3. **Single-Source Protection Safeguard**: Gracefully marks single-source data as `NOT_VERIFIABLE` without penalizing honest applicants with false contradiction penalties.
+4. **Policy Grounding via ChromaDB RAG**: Retrieves exact statutory excerpts and confidence scores from official policy guideline documents using dense vector embeddings (`all-MiniLM-L6-v2`).
+5. **3-Model XGBoost Machine Learning Ensemble**: Evaluates 13 canonical features to predict Risk Class (`LOW`, `MEDIUM`, `HIGH`), continuous Risk Index (`0–100`), Quality Score, and global feature gain importances.
+6. **LLM Post-Scoring Advisory Reasoner**: Synthesizes human-readable case summaries, highlights missing requirements, and drafts targeted clarification questions without altering deterministic calculations.
+7. **1-Click Official Decision Cockpit**: Enables senior reviewers to inspect evidence, record final decisions (`APPROVE`, `REQUEST_CLARIFICATION`, `REJECT`), and log mandatory override rationales.
+8. **Automated HTML Email Clearance Reports**: Dispatches gap-free, responsive government-branded HTML status cards directly to the applicant via SMTP.
+9. **Full Audit Trail & Analytics**: Real-time KPI dashboard tracking application throughput, risk distributions, approval ratios, and an append-only audit trail.
+10. **Bilingual Support**: Built-in runtime switching between English and Hindi (`hi`) across all screens.
 
-## Backend
+---
 
-Stack:
+## 🏛 System Architecture & Workflow Pipeline
 
-- Python
-- FastAPI
-- SQLAlchemy ORM
-- Alembic migrations
-- Pydantic schemas/settings
-- LangGraph workflow skeleton with typed `ApplicationProcessingState`
-- LangChain-compatible provider abstractions
-- Local ChromaDB knowledge retrieval with deterministic local embedding fallback
-- MySQL for Docker system-of-record deployment
-- SQLite default for fast local development and tests
-
-Important backend modules:
-
-- `backend/app/ingestion/file_store.py` validates file types, size limits, checksums, and local paths
-- `backend/app/extraction/` contains `DocumentParser`, `OCRProvider`, `LLMProvider`, and `EmbeddingProvider` abstractions
-- `backend/app/normalization/service.py` keeps raw extracted values separate from validated values
-- `backend/app/validation/service.py` runs validation before feature engineering/scoring
-- `backend/app/rules/engine.py` evaluates configurable scheme rules without LLMs
-- `backend/app/features/service.py` builds trusted tabular features after validation
-- `backend/app/ml/scoring.py` defines `ScoringService`, `XGBoostScoringService`, and labelled `MockScoringService`
-- `backend/app/explainability/service.py` persists evidence-first model/rule traces
-- `backend/app/workflow/` defines the required LangGraph node order
-- `backend/app/review/service.py` records human decisions and overrides
-- `backend/app/analytics/service.py` computes database-derived metrics
-
-## API Endpoints
-
-All platform APIs are versioned under `/api/v1`.
-
-- `POST /applications`
-- `POST /applications/{id}/documents`
-- `POST /applications/{id}/process`
-- `GET /applications/{id}`
-- `GET /applications/{id}/status`
-- `GET /applications/{id}/validation`
-- `GET /applications/{id}/score`
-- `GET /applications/{id}/evidence`
-- `GET /applications/{id}/workflow`
-- `POST /applications/{id}/review`
-- `POST /applications/{id}/clarification`
-- `POST /applications/{id}/review/open`
-- `POST /applications/{id}/feedback`
-- `GET /applications/{id}/feedback`
-- `GET /applications`
-- `GET /analytics/overview`
-- `GET /schemes`
-- `GET /schemes/{id}`
-- `POST /schemes`
-- `POST /schemes/{id}/rules`
-- `GET /knowledge/search`
-- `GET /health`
-
-FastAPI OpenAPI docs are available at `http://127.0.0.1:8000/docs`.
-
-## Database Tables
-
-The SQLAlchemy/Alembic schema includes:
-
-- `users`
-- `roles`
-- `applications`
-- `documents`
-- `extracted_data`
-- `application_profiles`
-- `schemes`
-- `scheme_rules`
-- `validation_results`
-- `rule_results`
-- `features`
-- `model_predictions`
-- `evidence`
-- `reviewer_assignments`
-- `reviewer_decisions`
-- `audit_logs`
-- `feedback`
-- `notifications`
-
-Document binaries are stored on the local filesystem. MySQL stores metadata, paths, checksums, status, audit records, evidence, and transactional data.
-
-## Frontend
-
-Stack:
-
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- lucide-react icons
-
-Pages:
-
-- Dashboard
-- New Application
-- Application Processing
-- Application Details
-- Validation & Verification
-- AI Scoring & Explainability
-- Reviewer Workspace
-- Audit Trail
-- Scheme Knowledge/Rules
-- Analytics
-
-The Application Details page follows the requested sequence: summary, documents, extracted information, validation results, rule results, ML scores, evidence, AI recommendation, and a prominent human decision area.
-
-## Local Development
-
-Install backend dependencies:
-
-```powershell
-python -m pip install -r backend\requirements.txt
+```
+Application Submission
+        ↓
+Document Ingestion & Checksumming (SHA-256)
+        ↓
+OCR & Text Extraction (pdfplumber / Tesseract)
+        ↓
+Application Profile Normalization
+        ↓
+3-Tier Deterministic & Cross-Document Validation
+        ↓
+ChromaDB Policy RAG Evidence Retrieval
+        ↓
+Feature Engineering (13 Canonical Features)
+        ↓
+3-Model XGBoost ML Scoring (Risk + Quality)
+        ↓
+LLM Post-Scoring Advisory Synthesis
+        ↓
+Reviewer Workspace (Officer Cockpit)
+        ↓
+Human Statutory Decision (Approve / Clarify / Reject)
+        ↓
+Automated HTML Email Clearance Dispatch
+        ↓
+Real-Time Analytics & Append-Only Audit Logging
 ```
 
-Install frontend dependencies:
+---
 
-```powershell
-cd frontend
-cmd /c npm.cmd install
-cd ..
+## 🛠 Technology Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend** | React 18, TypeScript, Vite, Vanilla CSS / Tailwind, Zustand, i18next (EN/HI), Lucide Icons |
+| **Backend API** | Python 3.10+, FastAPI, Pydantic v2, Uvicorn |
+| **Database** | SQLite (Development) / PostgreSQL / MySQL (Production), SQLAlchemy 2.0 ORM, Alembic |
+| **Document Intelligence** | `pdfplumber`, `pypdf`, `pytesseract` (Tesseract OCR), `python-docx`, `openpyxl` |
+| **Vector Store & RAG** | ChromaDB, Sentence-Transformers (`all-MiniLM-L6-v2`) |
+| **Machine Learning** | XGBoost (UBJ model format), Scikit-Learn, NumPy, Pandas |
+| **LLM Inference** | OpenRouter API Gateway (`z-ai/glm-5.2:free`, `minimax/minimax-m3:free`, `openrouter/auto`) |
+| **Email Service** | Python `smtplib`, `email.mime` (Responsive HTML Templates) |
+
+---
+
+## 📁 Repository Structure
+
+```
+├── backend/                               # FastAPI application backend
+│   ├── alembic/                           # Database migration scripts
+│   ├── app/
+│   │   ├── api/v1/                        # REST API routing endpoints
+│   │   ├── core/                          # Settings, security, exceptions, database
+│   │   ├── extraction/                    # OCR and multi-format document parsers
+│   │   ├── features/                      # 13-feature engineering service
+│   │   ├── ingestion/                     # File storage and SHA-256 validator
+│   │   ├── knowledge/                     # ChromaDB vector knowledge base service
+│   │   ├── llm_reasoning/                 # OpenRouter LLM advisory service
+│   │   ├── ml/                            # XGBoost scoring service & model artifacts
+│   │   ├── models/                        # 18 SQLAlchemy ORM entity models
+│   │   ├── normalization/                 # Application profile synthesizer
+│   │   ├── review/                        # Decision recording & human governance
+│   │   ├── services/                      # Email and notification services
+│   │   └── validation/                    # 3-tier deterministic validation engine
+│   └── tests/                             # Pytest automated test suite
+├── frontend/                              # React + TypeScript + Vite frontend
+│   ├── public/                            # Static assets and translations (en/hi)
+│   └── src/
+│       ├── components/                    # Reusable UI cards, tables, badges, headers
+│       ├── context/                       # Authentication and theme contexts
+│       ├── i18n/                          # Internationalization configuration
+│       ├── pages/                         # Application pages & reviewer workflows
+│       ├── services/                      # API client integration
+│       └── types/                         # TypeScript interface contracts
+├── data/
+│   ├── chroma/                            # Persistent ChromaDB vector collections
+│   ├── knowledge/                         # Statutory scheme policy markdown files
+│   └── uploads/                           # Encrypted document uploads
+├── docs/                                  # Project Documentation
+│   ├── REQUIREMENTS.md                    # System Requirements Specification (SRS)
+│   ├── TECHNICAL_DOCUMENTATION.md         # Technical Architecture & Pipeline Document
+│   └── SETUP.md                           # Developer Setup & Installation Guide
+├── scripts/                               # Helper scripts (TTS, PPTX, PDF generators)
+├── .env.example                           # Clean environment variables template
+├── .gitignore                             # Git ignore rules for security & artifacts
+├── docker-compose.yml                     # Multi-container deployment configuration
+└── README.md                              # This documentation
 ```
 
-Run the backend locally with SQLite:
+---
 
-```powershell
-$env:DATABASE_URL='sqlite:///./application_intelligence.db'
-$env:PYTHONPATH='backend'
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
+## 🚀 Quick Start Guide
 
-Run the frontend:
-
-```powershell
-cd frontend
-cmd /c npm.cmd run dev
-```
-
-Open:
-
-- Frontend: `http://127.0.0.1:5173`
-- Backend API: `http://127.0.0.1:8000`
-- OpenAPI: `http://127.0.0.1:8000/docs`
-
-## Docker Compose
-
-Copy `.env.example` to `.env` if you want to customize values.
-
-```powershell
-docker compose up --build
-```
-
-Services:
-
-- Backend API: `http://127.0.0.1:8000`
-- Frontend UI: `http://127.0.0.1:5173`
-- MySQL: `127.0.0.1:3306`
-- ChromaDB persistence: `data/chroma/`
-
-## Migrations
-
-Run Alembic locally:
-
-```powershell
+### 1. Backend Setup
+```bash
 cd backend
-$env:DATABASE_URL='sqlite:///./migration_check.db'
-python -m alembic upgrade head
-python -m alembic current
-cd ..
+python -m venv .venv
+source .venv/bin/activate    # On Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cp ../.env.example .env      # Configure API keys if needed
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+*Backend Swagger Docs: `http://localhost:8000/docs`*
 
-For Docker/MySQL, use the `DATABASE_URL` from `.env.example`.
-
-## Verification
-
-Backend tests:
-
-```powershell
-python -m pytest backend\tests -q
-```
-
-Frontend build:
-
-```powershell
+### 2. Frontend Setup
+```bash
 cd frontend
-cmd /c npm.cmd run build
-cmd /c npm.cmd run typecheck
-cd ..
+npm install
+npm run dev
 ```
+*Frontend Portal: `http://localhost:5173`*
 
-Sample vertical slice:
+---
 
-```powershell
-python scripts\verify_vertical_slice.py
-```
+## 🧪 Testing & Verification
 
-Expected sample output includes:
+- **Run Backend Tests**:
+  ```bash
+  cd backend && python -m pytest
+  ```
+- **Build Frontend for Production**:
+  ```bash
+  cd frontend && npm run build
+  ```
 
-- `workflow_current_node=HUMAN_REVIEW`
-- `review_status=AWAITING_HUMAN_REVIEW`
-- `contradiction_status=FAIL`
-- `CONTRADICTION DETECTED`
-- a reviewer-routing AI recommendation such as `EXPERT_REVIEW`
+---
 
-## Current Limitations
+## 📚 Complete Documentation Links
 
-- Document parsing is a deterministic local mock parser for the POC. Real PDF/DOCX/XLSX parsing and OCR adapters should replace it.
-- `MockScoringService` is labelled as a development model. It is not a calibrated fraud, quality, or eligibility model.
-- `XGBoostScoringService` is scaffolded but no trained model artifact is included.
-- ChromaDB is local and optional at runtime; the adapter falls back to local text retrieval if Chroma is unavailable.
-- Authentication/RBAC is abstracted with a demo user context. Production identity integration must replace it.
-- MySQL is configured for Docker, while local tests default to SQLite for speed.
-- External government integrations are local mock adapters only.
+- 📖 **[System Requirements Specification](docs/REQUIREMENTS.md)**: Detailed user roles, functional specifications, and NFRs.
+- 🏗 **[Technical Architecture & Pipeline](docs/TECHNICAL_DOCUMENTATION.md)**: Deep dive into ML features, RAG architecture, database models, and error recovery.
+- 💻 **[Installation & Setup Guide](docs/SETUP.md)**: Step-by-step setup for development, database migrations, and testing.
 
-## Next Implementation Steps
+---
 
-1. Add production-grade document parsers for PDF, DOCX, XLSX, CSV, and image OCR.
-2. Expand extraction schemas and confidence calibration.
-3. Implement reviewer authentication and role/permission enforcement.
-4. Add trained XGBoost artifacts, SHAP explanations, and model evaluation reports.
-5. Replace deterministic sample embeddings with an approved local embedding model.
-6. Add notification workflows and clarification response intake.
-7. Expand analytics with SLA tracking and reviewer queue management.
+## 🔒 Security & Privacy
 
+- **Zero Plaintext Secrets**: No API keys, passwords, or SMTP secrets are committed to version control.
+- **Role-Based Access**: Granular RBAC ensuring only authorized Senior Reviewers can submit statutory decisions.
+- **Audit Immutability**: All decisions and pipeline transitions are logged with timestamps and reviewer IDs.

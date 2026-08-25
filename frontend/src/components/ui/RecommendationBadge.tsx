@@ -9,17 +9,17 @@ export function RecommendationBadge({ value, large }: { value: RecValue; large?:
   if (!value) return <span className="text-sm text-slate-400">—</span>;
 
   const REC_CONFIG: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-    APPROVE:               { label: t("common.approved", "Approve"),                cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
-    APPROVED:              { label: t("common.approved", "Approved"),               cls: "border-emerald-200 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
-    REJECT:                { label: t("common.rejected", "Reject"),                 cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
-    REJECTED:              { label: t("common.rejected", "Rejected"),               cls: "border-rose-200 bg-rose-50 text-rose-800",          Icon: XCircle      },
-    REQUEST_CLARIFICATION: { label: t("common.clarification", "Clarification Required"), cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
-    REVIEW_REQUIRED:       { label: t("common.clarification", "Review Required"),        cls: "border-amber-200 bg-amber-50 text-amber-800",       Icon: HelpCircle   },
+    APPROVE:               { label: t("common.approved", "Approve"),                cls: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", Icon: CheckCircle2 },
+    APPROVED:              { label: t("common.approved", "Approved"),               cls: "border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]", Icon: CheckCircle2 },
+    REJECT:                { label: t("common.rejected", "Reject"),                 cls: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]",          Icon: XCircle      },
+    REJECTED:              { label: t("common.rejected", "Rejected"),               cls: "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]",          Icon: XCircle      },
+    REQUEST_CLARIFICATION: { label: t("common.clarification", "Clarification Required"), cls: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]",       Icon: HelpCircle   },
+    REVIEW_REQUIRED:       { label: t("common.clarification", "Review Required"),        cls: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]",       Icon: HelpCircle   },
   };
 
   const cfg = REC_CONFIG[value.toUpperCase()] ?? {
     label: value.replaceAll("_", " "),
-    cls: "border-slate-200 bg-slate-100 text-slate-600",
+    cls: "border-[#CBD5E1] bg-[#F1F5F9] text-[#475569]",
     Icon: HelpCircle,
   };
 

@@ -1,0 +1,114 @@
+==================================================
+DECC REVIEW PORTAL — OFFICIAL SYNCHRONIZED VOICEOVER SCRIPT
+==================================================
+Target Video: DECC_REVIEW_PORTAL_voiceover.mp4
+Total Duration: 09:11.84 (551.84 seconds)
+Voice: en-IN-PrabhatNeural (Calm Indian-English Professional Voice)
+Principle: 'AI assists. Human decides.'
+Total Synchronized Segments: 35
+==================================================
+
+[00:00 - 00:20]
+"Welcome to the DECC Review Portal, an AI-assisted platform designed to simplify environmental application review and decision support. The portal brings document processing, validation, evidence, risk assessment, and human review together in one workflow."
+
+[00:20 - 00:45]
+"The landing page introduces the platform and its main capabilities. The system is designed to reduce repetitive manual work while giving reviewers clear information to support their decisions."
+
+[00:45 - 01:00]
+"The portal also supports a clear and accessible user experience, allowing reviewers to work through the application process in a structured way."
+
+[01:00 - 01:15]
+"Reviewers begin by accessing the secure control room through the authentication screen."
+
+[01:15 - 01:30]
+"After authentication, the reviewer enters the main review workspace and can access applications, processing, validation, AI assessment, reviewer tools, schemes, and analytics."
+
+[01:30 - 01:55]
+"The dashboard provides a high-level view of the application queue. Reviewers can quickly see which applications are awaiting review, which require action, and which cases have already been approved."
+
+[01:55 - 02:15]
+"The application queue makes it easy to find a case, review its status, understand the current recommendation, and open the application for detailed review."
+
+[02:15 - 02:35]
+"Opening an application shows the key case information in one place. This includes the applicant, organization, scheme, project information, documents, and the current validation status."
+
+[02:35 - 02:55]
+"The application details are organized into clear sections so that reviewers can focus first on the information required for a decision."
+
+[02:55 - 03:10]
+"The evidence section provides supporting information retrieved from the applicable scheme and policy documents."
+
+[03:10 - 03:25]
+"This helps the reviewer understand the requirements behind a validation result instead of relying only on an automated status."
+
+[03:25 - 03:45]
+"The portal also provides a guided process for creating a new application. The reviewer can enter application details and provide the required supporting information."
+
+[03:45 - 04:00]
+"Documents can then be uploaded and reviewed before the application is submitted for processing."
+
+[04:00 - 04:15]
+"Once the application is submitted, the system begins the processing pipeline."
+
+[04:15 - 04:30]
+"The application moves through document processing and information extraction before the validation stage begins."
+
+[04:30 - 04:45]
+"Validation checks the submitted information against required fields, scheme requirements, and consistency rules."
+
+[04:45 - 05:00]
+"The system also performs cross-document verification to identify information that matches or differs between submitted documents."
+
+[05:00 - 05:15]
+"When information is unavailable for comparison, the system identifies the item for verification rather than automatically treating it as a failure."
+
+[05:15 - 05:30]
+"The validation page brings these checks together and clearly separates passed checks, issues requiring attention, and items that need further verification."
+
+[05:30 - 05:50]
+"Reviewers can examine individual application fields, document values, scheme requirements, and cross-document consistency from the validation workspace."
+
+[05:50 - 06:10]
+"The AI Assessment then combines the validated application information with supporting evidence and risk analysis to produce an overall assessment."
+
+[06:10 - 06:30]
+"The assessment includes the risk level, confidence, scoring information, and the main factors that influence the result."
+
+[06:30 - 06:50]
+"The AI Assistant provides a human-readable explanation of the assessment, helping the reviewer understand why the application received its current recommendation."
+
+[06:50 - 07:05]
+"Supporting evidence is also available so that the reviewer can connect the assessment with the applicable scheme and policy requirements."
+
+[07:05 - 07:20]
+"The Reviewer Workspace brings the most important information together for the final human review."
+
+[07:20 - 07:35]
+"Here, the reviewer can see why the case needs attention, inspect the evidence, review validation findings, and examine the AI assessment."
+
+[07:35 - 07:50]
+"The reviewer can then choose the appropriate action: approve the application, request clarification, or reject the application."
+
+[07:50 - 08:00]
+"The AI recommendation is advisory. The final clearance decision remains with the authorized human reviewer."
+
+[08:00 - 08:12]
+"After the review, the portal can prepare a conclusion report and communicate the result to the applicant."
+
+[08:12 - 08:25]
+"Email communication can be used for scenarios such as missing documents, missing information, clarification requests, approval, or rejection."
+
+[08:25 - 08:40]
+"The system can therefore turn the review findings into a clear, actionable communication for the applicant."
+
+[08:40 - 08:52]
+"The Schemes and Rules section manages the requirements used during application evaluation."
+
+[08:52 - 09:02]
+"Reviewers can search policy knowledge, review scheme rules, and manage the criteria used by the platform."
+
+[09:02 - 09:10]
+"Finally, analytics provides a high-level view of application activity, review outcomes, and validation trends."
+
+[09:10 - 09:11.8]
+"DECC Review Portal — AI assists, human decides."

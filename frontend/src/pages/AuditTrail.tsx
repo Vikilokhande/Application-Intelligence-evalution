@@ -1,7 +1,8 @@
 // AuditTrail.tsx — Readable audit event timeline.
-import { History, User } from "lucide-react";
+// Palette: Deep Navy Blue (#0A243F), Dark Navy (#071A2B), Mustard Gold (#D5A51A), Warm Off-White (#F8F9FA), White (#FFFFFF), Slate Gray (#66717C).
+import { History, User, CheckCircle2, FileText, Sparkles, ShieldCheck, Clock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { EmptyState, PageHeader, TechnicalDetails } from "../components/ui";
+import { EmptyState, PageHeader } from "../components/ui";
 import type { ApplicationDetail } from "../types/api";
 
 function fmtDate(iso: string | null | undefined) {
@@ -14,14 +15,21 @@ function fmtDate(iso: string | null | undefined) {
   } catch { return iso; }
 }
 
-function eventIcon(action: string): string {
-  if (action.includes("DECISION") || action.includes("APPROVED") || action.includes("REJECT")) return "✓";
-  if (action.includes("CREATED") || action.includes("SUBMITTED")) return "📋";
-  if (action.includes("DOCUMENT")) return "📄";
-  if (action.includes("VALIDATION") || action.includes("RULE")) return "🔍";
-  if (action.includes("ASSESSMENT") || action.includes("AI")) return "🤖";
-  if (action.includes("REVIEW") || action.includes("OPENED")) return "👤";
-  return "●";
+function EventIcon({ action }: { action: string }) {
+  const act = action.toUpperCase();
+  if (act.includes("DECISION") || act.includes("APPROVED") || act.includes("REJECT")) {
+    return <CheckCircle2 size={15} className="text-[#0A243F]" />;
+  }
+  if (act.includes("DOCUMENT") || act.includes("CREATED") || act.includes("SUBMITTED")) {
+    return <FileText size={15} className="text-[#0A243F]" />;
+  }
+  if (act.includes("ASSESSMENT") || act.includes("AI")) {
+    return <Sparkles size={15} className="text-[#D5A51A]" />;
+  }
+  if (act.includes("VALIDATION") || act.includes("RULE")) {
+    return <ShieldCheck size={15} className="text-[#0A243F]" />;
+  }
+  return <Clock size={15} className="text-[#66717C]" />;
 }
 
 export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
@@ -57,15 +65,15 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
   const events = detail.audit_trail ?? [];
 
   return (
-    <div className="max-w-[800px] mx-auto space-y-6">
+    <div className="max-w-[900px] mx-auto space-y-6 animate-slide-up font-sans">
       <PageHeader
         title={t("audit.title", "Audit Trail & Compliance Log")}
         subtitle={`${t("audit.subtitle", "Chronological record of evaluation events")}: ${detail.project_title ?? ""}`}
         breadcrumb={t("nav.group_governance", "Governance")}
         actions={
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
-            <History size={13} />
-            {events.length} {t("audit.events_count", "events")}
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#0A243F] shadow-2xs">
+            <History size={13} className="text-[#D5A51A]" />
+            {events.length} {t("audit.events_count", "Recorded Events")}
           </span>
         }
       />
@@ -80,7 +88,7 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
       {/* Timeline */}
       <div className="relative space-y-4 pl-8">
         {/* Vertical line */}
-        <div className="absolute left-3.5 top-3 bottom-3 w-0.5 bg-slate-200" aria-hidden />
+        <div className="absolute left-3.5 top-3 bottom-3 w-0.5 bg-[#E5E7EB]" aria-hidden />
 
         {events.map((rawEvent, i) => {
           const event  = rawEvent as Record<string, unknown>;
@@ -93,34 +101,28 @@ export function AuditTrail({ detail }: { detail: ApplicationDetail | null }) {
           return (
             <div key={i} className="relative">
               {/* Dot */}
-              <div className="absolute -left-5 top-4 flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-200 bg-white text-sm">
-                {eventIcon(action)}
+              <div className="absolute -left-5 top-4 flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#E5E7EB] bg-white shadow-2xs">
+                <EventIcon action={action} />
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-2">
+              <div className="rounded-2xl border border-[#E5E7EB] bg-white shadow-xs p-5 space-y-2">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-bold text-slate-800">{humanAction(action)}</p>
+                    <p className="text-sm font-bold text-[#0A243F]">{humanAction(action)}</p>
                     {summary && (
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{summary}</p>
+                      <p className="text-xs text-[#66717C] mt-1 leading-relaxed">{summary}</p>
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs text-slate-400">{fmtDate(ts)}</p>
-                    <div className="flex items-center gap-1 mt-0.5 justify-end">
-                      <User size={10} className="text-slate-300" />
-                      <p className="text-[11px] text-slate-400">
-                        {isSystemEvent ? t("audit.system_agent", "AI System") : actor}
+                    <p className="text-xs font-semibold text-[#66717C]">{fmtDate(ts)}</p>
+                    <div className="flex items-center gap-1 mt-1 justify-end">
+                      <User size={11} className="text-[#66717C]" />
+                      <p className="text-[11px] font-bold text-[#0A243F]">
+                        {isSystemEvent ? t("audit.system_agent", "System") : actor}
                       </p>
                     </div>
                   </div>
                 </div>
-
-                <TechnicalDetails label={t("details.technical_evidence_toggle", "View event details")}>
-                  <pre className="text-[10px] text-slate-500 whitespace-pre-wrap break-all leading-relaxed">
-                    {JSON.stringify(event, null, 2)}
-                  </pre>
-                </TechnicalDetails>
               </div>
             </div>
           );

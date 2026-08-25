@@ -1,0 +1,1168 @@
+# Technical Architecture & Implementation Document
+
+**System Name**: Directorate of Environment and Climate Change (DECC) Application Intelligence & Environmental Review Portal  
+**Document Version**: 2.0.0  
+**Classification**: Technical Architecture & Implementation Guide  
+**Status**: Implemented & Production-Ready  
+**Date**: August 2026  
+
+---
+
+## Table of Contents
+1. [Executive Summary](#1-executive-summary)
+2. [System Objectives](#2-system-objectives)
+3. [Functional Scope](#3-functional-scope)
+4. [Non-Functional Requirements](#4-non-functional-requirements)
+5. [System Context](#5-system-context)
+6. [High-Level Architecture](#6-high-level-architecture)
+7. [Detailed Component Architecture](#7-detailed-component-architecture)
+8. [End-to-End Application Workflow](#8-end-to-end-application-workflow)
+9. [Document Processing Workflow](#9-document-processing-workflow)
+10. [OCR & Extraction Architecture](#10-ocr--extraction-architecture)
+11. [Normalization & Data Processing](#11-normalization--data-processing)
+12. [Validation Architecture](#12-validation-architecture)
+13. [Cross-Document Verification](#13-cross-document-verification)
+14. [RAG & Knowledge Base Architecture](#14-rag--knowledge-base-architecture)
+15. [ML Feature Engineering & XGBoost Scoring](#15-ml-feature-engineering--xgboost-scoring)
+16. [LLM Reasoning Architecture](#16-llm-reasoning-architecture)
+17. [Human Reviewer Workflow](#17-human-reviewer-workflow)
+18. [Email & Conclusion Workflow](#18-email--conclusion-workflow)
+19. [Frontend Architecture](#19-frontend-architecture)
+20. [Backend Architecture](#20-backend-architecture)
+21. [Database Architecture & Data Model](#21-database-architecture--data-model)
+22. [API Architecture & Endpoints](#22-api-architecture--endpoints)
+23. [Authentication & Authorization](#23-authentication--authorization)
+24. [Error Handling & Resilience](#24-error-handling--resilience)
+25. [LLM Rate Limiting & Retry Architecture](#25-llm-rate-limiting--retry-architecture)
+26. [Logging & Observability](#26-logging--observability)
+27. [Data Flow Tables](#27-data-flow-tables)
+28. [Security Architecture](#28-security-architecture)
+29. [Deployment Architecture](#29-deployment-architecture)
+30. [Local Development Architecture](#30-local-development-architecture)
+31. [Technology Stack](#31-technology-stack)
+32. [Detailed Implementation Flow](#32-detailed-implementation-flow)
+33. [Example Application Lifecycle](#33-example-application-lifecycle)
+34. [Testing Strategy](#34-testing-strategy)
+35. [Performance Considerations](#35-performance-considerations)
+36. [Architectural Decision Records (ADRs)](#36-architectural-decision-records-adrs)
+37. [Conclusion & Future Roadmap](#37-conclusion--future-roadmap)
+
+---
+
+## 1. Executive Summary
+
+The **Directorate of Environment and Climate Change (DECC) Review Portal** is an AI-powered enterprise review and decision-support platform built to automate the ingestion, verification, validation, and risk evaluation of environmental grant applications and statutory clearance requests.
+
+Historically, environmental application processing relied on manual officer inspection of heterogeneous physical documents (PDF proposals, budget sheets, organizational certificates, and EIA reports), resulting in multi-week evaluation cycles, undetected budgetary contradictions, and compliance backlogs.
+
+This platform bridges automated intelligence with strict statutory compliance through a **Human-in-the-Loop (HITL)** architecture:
+- **Deterministic Validation & Cross-Document Consistency**: Eliminates data conflicts across submitted files.
+- **Retrieval-Augmented Generation (RAG)**: Indexes statutory environmental scheme guidelines via semantic vector embeddings.
+- **Machine Learning Ensemble**: Uses 3 production XGBoost models for multi-class risk classification, risk scoring (0–100), and application quality scoring (0–100).
+- **Post-Scoring LLM Reasoning**: Generates structured, evidence-grounded case explanations without ever overriding deterministic scores.
+- **Authoritative Officer Decision Cockpit**: Ensures that AI assists and informs, while the final statutory sign-off rests exclusively with authorized government officers.
+
+---
+
+## 2. System Objectives
+
+1. **Deterministic Accuracy**: Ensure zero hallucinations in statutory compliance checks by computing rule outcomes deterministically.
+2. **Cross-Document Integrity**: Detect budget discrepancies, timeline mismatches, and entity conflicts across multi-file submissions.
+3. **Evidence-Grounded RAG**: Ground all policy guidelines and threshold limits directly in official government scheme documentation.
+4. **Transparent Risk Scoring**: Provide calibrated risk indices (0–100) and feature importances to provide reviewers with explainable ML predictions.
+5. **Operational Efficiency**: Reduce application turnaround time from weeks to minutes while maintaining full auditability.
+6. **Bilingual Accessibility**: Full English and Hindi (`hi`) multilingual support across all officer workflows and reviewer interfaces.
+
+---
+
+## 3. Functional Scope
+
+| Functional Area | Implemented Functionality | Planned / Future Scope |
+| :--- | :--- | :--- |
+| **Application Intake** | 3-step submission wizard, metadata capture, multi-file upload (PDF, DOCX, XLSX, images). | Direct API integration with external citizen identity portals (DigiLocker, e-Pramaan). |
+| **Document Processing** | Tesseract OCR, PyPDF/PDFPlumber text extraction, heuristic & LLM document classification. | Multi-page layout parsing with vision transformers for complex GIS maps. |
+| **Normalization** | Unified `ApplicationProfile` synthesis, cross-document canonical field selection, conflict tracking. | Temporal entity resolution across multi-year historical applications. |
+| **Validation** | 12+ deterministic checks, scheme rule engine, cross-document comparison, RAG guideline checks. | Automated geospatial boundary overlap checks with GIS satellite layers. |
+| **RAG Knowledge Base** | ChromaDB vector store, `sentence-transformers` embeddings, overlapping chunking, similarity retrieval. | Multi-vector parent-child document chunking for complex policy appendices. |
+| **Machine Learning** | 3-model XGBoost ensemble (`risk_classifier`, `risk_regressor`, `quality_regressor`), 13 canonical features. | Continual active learning loops triggered by officer decision overrides. |
+| **LLM Reasoning** | OpenRouter OpenAI-compatible client, structured Pydantic schema validation, fallback retry. | On-premise air-gapped LLM inference via vLLM / Ollama for classified files. |
+| **Reviewer Cockpit** | Priority queue, evidence inspection, decision recording (Approve / Clarify / Reject), notes. | Multi-tier sequential approval hierarchies (Inspector → Director → Secretary). |
+| **Notifications & Reports** | SMTP email dispatch of rich HTML gap-free clearance reports with actionable issue cards. | SMS gateway integration and WhatsApp status notification webhooks. |
+
+---
+
+## 4. Non-Functional Requirements
+
+- **Availability & Resilience**: The processing pipeline must be fault-tolerant; if the external LLM provider experiences timeouts or rate limits (HTTP 429), the pipeline flags degraded mode, preserves all deterministic checks, and halts gracefully without data loss.
+- **Security & Privacy**: Zero storage of raw LLM API keys in logs or client-facing responses; role-based access control (RBAC); strict MIME-type and checksum file validation.
+- **Performance**: End-to-end processing of a 4-document application package within 15–45 seconds depending on OCR and LLM response latency.
+- **Auditability**: Complete append-only audit trail logging every state transition, user interaction, and ML prediction with ISO timestamps.
+
+---
+
+## 5. System Context
+
+The system interfaces with applicants, government review officers, external LLM inference providers, SMTP mail relays, and internal vector/relational databases.
+
+```mermaid
+flowchart TD
+    subgraph Users ["Actors & Stakeholders"]
+        Applicant["Citizen / Organization Applicant"]
+        Officer["Authorized Government Reviewer"]
+    end
+
+    subgraph FrontendApp ["DECC Review Portal (Frontend)"]
+        UI["React 18 + Vite + Tailwind UI<br/>(Bilingual: EN / HI)"]
+    end
+
+    subgraph BackendApp ["Core Backend Services"]
+        API["FastAPI REST API (v1)"]
+        Pipeline["Application Processing Pipeline"]
+        Engine["Rule Engine & Validation"]
+        MLService["XGBoost ML Scoring Service"]
+        RAGService["ChromaDB Vector Knowledge Base"]
+        LLMService["OpenRouter LLM Client"]
+        MailService["SMTP Mail Dispatcher"]
+    end
+
+    subgraph Storage ["Persistence Layer"]
+        DB[(SQLite / PostgreSQL Database)]
+        FileStore["Local Encrypted File Store (/data/uploads)"]
+        VectorStore["Chroma Vector DB (/data/chroma)"]
+        KBStore["Scheme Policy Markdown (/data/knowledge)"]
+    end
+
+    subgraph External ["External Providers"]
+        OpenRouter["OpenRouter / OpenAI LLM APIs"]
+        SMTPServer["Government / Corporate SMTP Relay"]
+    end
+
+    Applicant -->|Submits Application & Files| UI
+    Officer -->|Reviews Findings & Records Decision| UI
+    UI <-->|REST API Calls / JWT| API
+    API --> Pipeline
+    Pipeline --> DB
+    Pipeline --> FileStore
+    Pipeline --> Engine
+    Pipeline --> RAGService
+    Pipeline --> MLService
+    Pipeline --> LLMService
+    RAGService <--> VectorStore
+    RAGService <--> KBStore
+    LLMService <--> OpenRouter
+    Pipeline --> MailService
+    MailService --> SMTPServer
+    SMTPServer -->|Delivers Clearance Report| Applicant
+```
+
+---
+
+## 6. High-Level Architecture
+
+The platform follows a layered, modular service-oriented architecture (SOA) with a clean separation between ingestion, extraction, validation, machine learning, generative reasoning, and user presentation.
+
+```mermaid
+graph TB
+    subgraph ClientLayer ["Client Presentation Layer (SPA)"]
+        ReactApp["React 18 + TypeScript SPA"]
+        Tailwind["Tailwind CSS + Government Design System"]
+        I18n["i18next Multilingual Engine (EN / HI)"]
+    end
+
+    subgraph GatewayLayer ["API Gateway & Controller Layer"]
+        FastAPI["FastAPI Application (ASGI)"]
+        AuthMiddleware["JWT Authentication & RBAC"]
+        CORS["CORS & Request Validation Middleware"]
+    end
+
+    subgraph CoreServices ["Core Business Services"]
+        AppService["Application Processing Service"]
+        NormService["Field Normalization Service"]
+        ValService["Deterministic & Cross-Doc Validation"]
+        RuleEngine["Statutory Scheme Rule Engine"]
+        KnowledgeSvc["RAG Knowledge Service (ChromaDB)"]
+        FeatureSvc["13-Feature Engineering Service"]
+        ScoringSvc["XGBoost 3-Model Scoring Service"]
+        LLMReasoning["LLM Post-Scoring Reasoning Service"]
+        RoutingSvc["Reviewer Routing Service"]
+        EmailSvc["Gap-Free HTML Email Service"]
+        AuditSvc["Append-Only Audit Service"]
+    end
+
+    subgraph DataLayer ["Data & Storage Layer"]
+        SQLAlchemy["SQLAlchemy 2.0 ORM"]
+        RelationalDB[(Relational DB: SQLite / Postgres)]
+        VectorDB["ChromaDB Vector Store"]
+        DocFS["File Storage System"]
+    end
+
+    ReactApp --> FastAPI
+    FastAPI --> AuthMiddleware
+    AuthMiddleware --> CORS
+    CORS --> AppService
+    AppService --> NormService
+    AppService --> ValService
+    AppService --> RuleEngine
+    AppService --> KnowledgeSvc
+    AppService --> FeatureSvc
+    AppService --> ScoringSvc
+    AppService --> LLMReasoning
+    AppService --> RoutingSvc
+    AppService --> EmailSvc
+    AppService --> AuditSvc
+    ValService --> SQLAlchemy
+    FeatureSvc --> SQLAlchemy
+    ScoringSvc --> SQLAlchemy
+    KnowledgeSvc --> VectorDB
+    SQLAlchemy --> RelationalDB
+```
+
+---
+
+## 7. Detailed Component Architecture
+
+Below is the directory-level mapping of backend components and their functional responsibilities:
+
+```
+backend/app/
+├── api/v1/routes.py            # REST endpoints: Auth, Applications, Documents, Processing, Scoring, Review, Email
+├── core/
+│   ├── config.py               # Pydantic BaseSettings (OpenRouter, SMTP, DB paths, OCR, thresholds)
+│   ├── exceptions.py           # Domain exceptions (ModelUnavailableError, LLMProviderError, OCRProviderError)
+│   └── security.py             # JWT issuance, password hashing, UserContext dependency
+├── db/
+│   ├── base.py                 # SQLAlchemy declarative base
+│   └── session.py              # Engine factory, session maker, SQLite auto-migration helper
+├── models/entities.py          # 18 SQLAlchemy ORM entity models
+├── extraction/
+│   ├── service.py              # DocumentIntelligenceService coordinator
+│   └── providers.py            # PDFPlumber, Tesseract OCR, Heuristic Regex, LLM extraction providers
+├── normalization/service.py    # Multi-document field merging, canonical selection, ApplicationProfile synthesis
+├── validation/service.py       # Deterministic checks, RAG guideline checks, cross-document comparison
+├── rules/engine.py             # SchemeRule evaluation against state guidelines and financial limits
+├── knowledge/
+│   └── service.py              # ChromaKnowledgeBase, sentence-transformers embeddings, Markdown chunker
+├── features/service.py         # 38 pipeline features -> 13 canonical ML features for XGBoost
+├── ml/
+│   ├── scoring.py              # XGBoostScoringService (3 .ubj models: classifier, risk_reg, quality_reg)
+│   └── application_intelligence_xgboost_training_artifacts/ # Serialized UBJ models & schema JSON
+├── llm_reasoning/service.py    # Post-scoring OpenRouter client, Pydantic validation, exponential backoff
+├── review/service.py           # ReviewService: decision recording, override logging, audit updates
+├── routing/service.py          # Auto-assigns applications to reviewer roles based on risk and confidence
+├── services/
+│   ├── processing.py           # Master ApplicationProcessingService pipeline coordinator
+│   ├── email.py                # SmtpEmailService: gap-free HTML clearance report generation & dispatch
+│   └── seed.py                 # Seeds default environmental schemes and statutory guidelines
+└── workflow/
+    ├── graph.py                # LangGraph state machine definition (12 nodes)
+    └── state.py                # ApplicationProcessingState TypedDict
+```
+
+```mermaid
+graph LR
+    subgraph API ["app/api/v1/"]
+        Routes["routes.py"]
+    end
+
+    subgraph Coordination ["app/services/"]
+        ProcSvc["processing.py"]
+    end
+
+    subgraph Ingestion ["app/extraction/"]
+        ExtrSvc["service.py"]
+        Providers["providers.py"]
+    end
+
+    subgraph Normalization ["app/normalization/"]
+        NormSvc["service.py"]
+    end
+
+    subgraph Verification ["app/validation/ & app/rules/"]
+        ValSvc["validation/service.py"]
+        RuleEng["rules/engine.py"]
+        KnowSvc["knowledge/service.py"]
+    end
+
+    subgraph ML_AI ["app/features/, app/ml/, app/llm_reasoning/"]
+        FeatSvc["features/service.py"]
+        MLScoring["ml/scoring.py"]
+        LLMReason["llm_reasoning/service.py"]
+    end
+
+    subgraph Governance ["app/review/ & app/services/email.py"]
+        ReviewSvc["review/service.py"]
+        EmailSvc["email.py"]
+    end
+
+    Routes --> ProcSvc
+    ProcSvc --> ExtrSvc
+    ExtrSvc --> Providers
+    ProcSvc --> NormSvc
+    ProcSvc --> ValSvc
+    ProcSvc --> RuleEng
+    ValSvc --> KnowSvc
+    ProcSvc --> FeatSvc
+    ProcSvc --> MLScoring
+    ProcSvc --> LLMReason
+    ProcSvc --> ReviewSvc
+    Routes --> EmailSvc
+```
+
+---
+
+## 8. End-to-End Application Workflow
+
+The lifecycle of an application progresses through 7 human stages (orchestrated internally across 12 LangGraph nodes).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Citizen as Applicant
+    participant UI as Frontend UI
+    participant API as FastAPI Backend
+    participant Ingest as Extraction / OCR
+    participant Norm as Normalization
+    participant Val as Validation & Rules
+    participant RAG as ChromaDB RAG
+    participant ML as XGBoost ML
+    participant LLM as OpenRouter LLM
+    actor Officer as Government Officer
+
+    Citizen->>UI: Submit Form & Upload PDF/Doc Attachments
+    UI->>API: POST /api/v1/applications + Upload Documents
+    API->>API: Persist Application (Status: DRAFT)
+    UI->>API: POST /api/v1/applications/{id}/process
+    
+    API->>Ingest: Extract text & classify documents
+    Ingest-->>API: Extracted raw field JSON + confidence
+    
+    API->>Norm: Synthesize canonical ApplicationProfile
+    Norm-->>API: Unified application profile
+    
+    API->>Val: Run deterministic & cross-document checks
+    API->>RAG: Retrieve scheme guideline chunks
+    RAG-->>Val: Grounding policy evidence
+    Val-->>API: Validation results (PASS / WARN / FAIL / NOT_VERIFIABLE)
+    
+    API->>ML: Build 13 canonical features & score
+    ML-->>API: Risk class, Risk score (0-100), Quality score (0-100)
+    
+    API->>LLM: Generate post-scoring advisory reasoning
+    LLM-->>API: Summary, key findings, clarification points
+    
+    API->>API: Set status = AWAITING_HUMAN_REVIEW
+    API-->>UI: Return complete processed state
+    
+    Officer->>UI: Inspect Findings, Evidence & AI Advisory
+    Officer->>UI: Record Official Decision (Approve / Clarify / Reject)
+    UI->>API: POST /api/v1/applications/{id}/review
+    API->>API: Commit final decision to AuditLog
+    
+    Officer->>UI: Click "Email Report"
+    UI->>API: POST /api/v1/applications/{id}/send-report
+    API-->>Citizen: Dispatch Gap-Free HTML Clearance Report via SMTP
+```
+
+---
+
+## 9. Document Processing Workflow
+
+```mermaid
+flowchart TD
+    StartDoc([Incoming Uploaded File]) --> CheckExt{Allowed Extension?}
+    CheckExt -- No --> ErrExt[Reject 400 Bad Request]
+    CheckExt -- Yes --> Hash[Calculate SHA-256 Checksum]
+    Hash --> Save[Save to File Storage /data/uploads]
+    Save --> DetectMime[Inspect MIME Type & Magic Bytes]
+    DetectMime --> Parse[Attempt Native Parsing: PyPDF / PDFPlumber / Docx]
+    Parse --> CheckDensity{Text Length >= 100 &<br/>Density Ratio >= 0.10?}
+    CheckDensity -- Yes --> Classify[Classify Document Type]
+    CheckDensity -- No --> OCR[Execute Tesseract OCR Engine]
+    OCR --> Classify
+    Classify --> StructExt[Extract Structured Schema Fields via Regex / LLM]
+    StructExt --> DocConf[Compute Field Extraction Confidence]
+    DocConf --> StoreExtracted[(Store ExtractedData Entity)]
+```
+
+---
+
+## 10. OCR & Extraction Architecture
+
+The extraction subsystem employs a tiered strategy:
+1. **Direct Digital Extraction**: `pdfplumber` and `pypdf` extract native text layers, bounding boxes, and table cells.
+2. **Quality Metric Verification**: Computes `text_length` and `chars_to_bytes_ratio`. If `text_length < 100` or `ratio < 0.10`, the file is marked as a scanned raster image.
+3. **Tesseract OCR Fallback**: Renders PDF pages to 300 DPI PIL images and executes `pytesseract.image_to_string` with language pack `eng`.
+4. **Structured Key Extraction**:
+   - `extract_applicant_name`, `extract_project_title`, `extract_cost`, `extract_duration`, `extract_certificate_number`.
+   - Heuristic regex patterns execute first. If `LLM_PROVIDER` is active, high-confidence LLM parsing extracts nested entities.
+
+---
+
+## 11. Normalization & Data Processing
+
+When multiple documents are uploaded (e.g. Application Form, Project Proposal, Budget Sheet, Certificate), extraction produces separate `ExtractedData` records with potentially conflicting values.
+
+```mermaid
+flowchart TD
+    subgraph MultiDocs ["Multi-Document Input"]
+        DocA["Document A (Application Form)"]
+        DocB["Document B (Budget Proposal)"]
+        DocC["Document C (EIA Report)"]
+        DocD["Document D (Org Certificate)"]
+    end
+
+    subgraph NormalizationEngine ["Normalization Service (app/normalization/service.py)"]
+        ExtractRaw["Collect Raw Extracted Entities"]
+        MergeFields["Field-by-Field Conflict Resolution"]
+        ConfidenceRank["Select Value with Highest Extraction Confidence"]
+        Synthesize["Build Nested Canonical Profile JSON"]
+    end
+
+    subgraph OutputProfile ["Canonical Profile Structure"]
+        AppProfile["ApplicationProfile<br/>-----------------------------<br/>• applicant: {name, email, org_type}<br/>• project: {title, category, location}<br/>• financial: {project_cost}<br/>• timeline: {duration_months}<br/>• certificates: {certificate_number}<br/>• environmental_attributes: {benefit}"]
+    end
+
+    DocA --> ExtractRaw
+    DocB --> ExtractRaw
+    DocC --> ExtractRaw
+    DocD --> ExtractRaw
+    ExtractRaw --> MergeFields
+    MergeFields --> ConfidenceRank
+    ConfidenceRank --> Synthesize
+    Synthesize --> AppProfile
+```
+
+**Conflict Resolution Strategy**:
+- For scalar strings (applicant name, project title), the value with the highest confidence extraction is selected as canonical, while all alternate values are stored in `sources` arrays for cross-document consistency checks.
+- For financial values (costs), numbers are parsed into floating-point INR amounts. Discrepancies between documents exceeding ₹5,000 or 2% trigger a `CROSS_DOCUMENT_CONSISTENCY` warning.
+
+---
+
+## 12. Validation Architecture
+
+Validation executes across **three distinct layers**, producing deterministic findings categorized into 4 statuses:
+- **`PASS`**: Condition strictly met with positive evidence.
+- **`WARN`**: Minor discrepancy or missing non-critical document.
+- **`FAIL`**: Explicit violation of scheme thresholds or cross-document contradiction.
+- **`NOT_VERIFIABLE`**: Required secondary document missing for multi-document cross-comparison. **Crucially, `NOT_VERIFIABLE` is never penalized as a contradiction.**
+
+```mermaid
+graph TD
+    subgraph ValidationLayers ["Validation Engine (app/validation/service.py)"]
+        L1["1. Deterministic Validation<br/>(Schema, Mandatory Fields, Range Checks)"]
+        L2["2. RAG Guideline Validation<br/>(Scheme Guidelines, Statutory Limits, Eligibility)"]
+        L3["3. Cross-Document Consistency<br/>(Name Match, Budget Match, Duration Match)"]
+    end
+
+    subgraph Outcomes ["Validation Outcomes"]
+        P["✓ PASS (Verified)"]
+        W["⚠ WARN (Minor Attention)"]
+        F["✕ FAIL (Violated / Contradiction)"]
+        NV["? NOT_VERIFIABLE (Single-Source / Needs Verification)"]
+    end
+
+    L1 --> P & W & F
+    L2 --> P & W & F
+    L3 --> P & F & NV
+```
+
+---
+
+## 13. Cross-Document Verification
+
+```mermaid
+flowchart TD
+    StartCheck["Cross-Document Verification Routine"] --> CheckDocs{"Distinct Documents Extracted?"}
+    
+    CheckDocs -- "Count < 2" --> NotVerifiable["Status: NOT_VERIFIABLE<br/>Message: Single document extracted. Awaiting secondary document for cross-verification."]
+    
+    CheckDocs -- "Count >= 2" --> Compare{"Values Match within Tolerances?<br/>(Absolute: ₹5,000 | Relative: 2%)"}
+    
+    Compare -- "Yes (Matches)" --> Pass["Status: PASS<br/>Values consistent across Document A and Document B"]
+    
+    Compare -- "No (Discrepancy)" --> Fail["Status: FAIL<br/>Contradiction detected between Document A and Document B"]
+
+    NotVerifiable --> ScoreClean["Feature Engineering:<br/>Consistency Ratio = 1.0 (No false penalty)"]
+    Pass --> ScoreClean
+    Fail --> ScorePenalty["Feature Engineering:<br/>Contradiction Count + 1<br/>Consistency Ratio = 0.0"]
+```
+
+---
+
+## 14. RAG & Knowledge Base Architecture
+
+```mermaid
+flowchart TD
+    subgraph KnowledgeIngestion ["Knowledge Base Ingestion (data/knowledge/*.md)"]
+        MD["Statutory Scheme Guides (e.g. green_infrastructure_scheme.md)"]
+        Chunker["Text Chunker (chunk_size=500 words, overlap=50)"]
+        Embedder["Embedding Engine: sentence-transformers/all-MiniLM-L6-v2"]
+        ChromaStore[("ChromaDB Vector Store (/data/chroma)")]
+    end
+
+    subgraph RuntimeRetrieval ["Runtime Query & Evidence Linking"]
+        AppQuery["Application Context Query: Category + Cost + Org Type"]
+        SimSearch["Cosine Similarity Search (k=3)"]
+        TopChunks["Top Retrieved Policy Chunks (score >= 0.35)"]
+        EvidenceEntity["Persist Evidence Record linked to Application"]
+        ReviewerUI["Render Evidence in Reviewer Workspace UI"]
+    end
+
+    MD --> Chunker
+    Chunker --> Embedder
+    Embedder --> ChromaStore
+    AppQuery --> SimSearch
+    ChromaStore --> SimSearch
+    SimSearch --> TopChunks
+    TopChunks --> EvidenceEntity
+    EvidenceEntity --> ReviewerUI
+```
+
+---
+
+## 15. ML Feature Engineering & XGBoost Scoring
+
+The platform transforms raw validation results, scheme rules, and application profile parameters into **38 available features**, isolating **13 canonical features** required by the production XGBoost models.
+
+### The 13 Canonical ML Features
+
+| # | Feature Name | Source | Transformation | Range | Meaning & Missing Handling |
+| :- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `document_completeness` | Document Check | `(required - missing) / required` | `[0.0, 1.0]` | Ratio of mandatory documents attached. Defaults to 0.0 if no documents. |
+| 2 | `required_field_completeness` | Field Validation | `passed_fields / total_required_fields` | `[0.0, 1.0]` | Completeness of mandatory application form fields. |
+| 3 | `eligibility_pass_ratio` | Scheme Rules | `passed_rules / total_rules` | `[0.0, 1.0]` | Proportion of scheme rules satisfied. |
+| 4 | `budget_consistency` | Cross-Doc Validation | Cost consistency check ratio | `[0.0, 1.0]` | 1.0 if costs match or single source; 0.0 if contradicted. |
+| 5 | `certificate_validity` | Authenticity Check | Binary flag | `{0.0, 1.0}` | 1.0 if certificate number verified; 0.0 if invalid or failed. |
+| 6 | `contradiction_count` | Cross-Doc Validation | Integer count cast to float | `[0.0, N]` | Number of explicit cross-document data conflicts detected. |
+| 7 | `duplicate_similarity` | Checksum Check | Binary flag | `{0.0, 1.0}` | 1.0 if duplicate document checksum exists in database. |
+| 8 | `suspicious_indicator_count` | Anomaly Check | Count of indicators | `[0.0, N]` | Count of anomaly flags (e.g. excessive cost > ₹1 crore). |
+| 9 | `document_quality` | OCR & Validation | `(pass + not_checked*0.25) / total` | `[0.0, 1.0]` | Overall document legibility and check pass rate. |
+| 10 | `proposal_quality` | Composite | `(field_comp + extract_conf + val_conf) / 3` | `[0.0, 1.0]` | Synthesized metric of application detail and extraction fidelity. |
+| 11 | `project_feasibility` | Composite | `(rule_pass + budget_cons + dur_cons) / 3` | `[0.0, 1.0]` | Feasibility of scope matching statutory scheme limits. |
+| 12 | `environmental_impact` | Normalization | Binary flag | `{0.0, 1.0}` | 1.0 if environmental benefits and mitigation scope defined. |
+| 13 | `extraction_confidence` | Normalization | OCR / Parser average score | `[0.0, 1.0]` | Mean extraction confidence across all parsed fields. |
+
+### 3-Model XGBoost Ensemble Pipeline
+
+```mermaid
+flowchart TD
+    FeatVec["13-Feature Vector [x1, x2, ..., x13]"]
+    
+    subgraph Ensemble ["XGBoost Production Models (app/ml/scoring.py)"]
+        M1["1. risk_classifier.ubj<br/>(XGBClassifier)"]
+        M2["2. risk_regressor.ubj<br/>(XGBRegressor)"]
+        M3["3. quality_regressor.ubj<br/>(XGBRegressor)"]
+    end
+
+    subgraph Outputs ["Predictions & Explainability"]
+        O1["predict_proba → Prediction Class:<br/>LOW_RISK | MEDIUM_RISK | HIGH_RISK<br/>Confidence: max(P)"]
+        O2["predict → Risk Score: [0.0 - 100.0]<br/>(Higher = Riskier)"]
+        O3["predict → Quality Score: [0.0 - 100.0]<br/>(Higher = Higher Quality)"]
+        O4["get_score(importance_type='gain')<br/>Normalized Global Gain Feature Importances"]
+    end
+
+    FeatVec --> M1 & M2 & M3
+    M1 --> O1 & O4
+    M2 --> O2
+    M3 --> O3
+```
+
+> [!NOTE]
+> Feature importance is calculated using **global gain importance** from the XGBoost booster trees, normalized by total gain. It does not perform per-application SHAP attribution.
+
+---
+
+## 16. LLM Reasoning Architecture
+
+The LLM is invoked **only once** after deterministic validation and XGBoost scoring have concluded. It provides post-scoring decision support and never alters scores.
+
+```mermaid
+flowchart TD
+    Context["Structured Inputs:<br/>• Application Metadata<br/>• XGBoost Scores (Class, Risk, Quality)<br/>• 13 Feature Values<br/>• Validation Results & Contradictions<br/>• Scheme Rule Results<br/>• Retrieved RAG Evidence"]
+    
+    Prompt["Construct System & User Prompt<br/>(Strict JSON Output Contract)"]
+    
+    Client["OpenRouter Client (OpenAI-compatible)"]
+    
+    subgraph ExecutionWithFallback ["Execution & Resilience Pipeline"]
+        CallPrimary["Call Primary Model (z-ai/glm-5.2:free / minimax-m3)"]
+        CheckSuccess{"Success?"}
+        Retry["Exponential Backoff (base=3.0s, max=30s, retries=2)"]
+        Fallback["Call Fallback Model (openrouter/auto)"]
+        ValidateSchema["Pydantic Schema Validation (LLMReasoningOutput)"]
+        DegradedMode["Set llm_status = 'UNAVAILABLE'<br/>Preserve all deterministic & ML scores"]
+    end
+
+    Context --> Prompt
+    Prompt --> Client
+    Client --> CallPrimary
+    CallPrimary --> CheckSuccess
+    CheckSuccess -- "429 / Timeout" --> Retry
+    Retry --> CallPrimary
+    CheckSuccess -- "Failed Retries" --> Fallback
+    Fallback --> CheckSuccess
+    CheckSuccess -- "Success" --> ValidateSchema
+    CheckSuccess -- "All Failed" --> DegradedMode
+    ValidateSchema --> Persist["Persist to Application Workflow State"]
+    DegradedMode --> Persist
+```
+
+---
+
+## 17. Human Reviewer Workflow
+
+```mermaid
+stateDiagram-v2
+    [*] --> ApplicationSubmitted: Ingest
+    ApplicationSubmitted --> ProcessingPipeline: Automated Verification
+    ProcessingPipeline --> AwaitingHumanReview: Pipeline Complete (Checkpoint)
+    
+    state AwaitingHumanReview {
+        [*] --> ReviewSummary: Inspect Case Overview
+        ReviewSummary --> InspectFindings: Review Contradictions & Warnings
+        InspectFindings --> VerifyEvidence: Cross-Check RAG Policy Excerpts
+        VerifyEvidence --> EvaluateAIAdvisory: Read Risk Score & Key Findings
+        EvaluateAIAdvisory --> SelectDecision: Choose Decision Option
+    }
+
+    SelectDecision --> Approved: Click Approve (Compliant)
+    SelectDecision --> ClarificationRequested: Click Request Clarification (Deficiencies)
+    SelectDecision --> Rejected: Click Reject (Non-compliant)
+
+    Approved --> RecordAudit: Submit Final Decision
+    ClarificationRequested --> RecordAudit: Submit Final Decision
+    Rejected --> RecordAudit: Submit Final Decision
+
+    RecordAudit --> DispatchReport: Officer Clicks 'Email Report'
+    DispatchReport --> [*]: Case Closed
+```
+
+---
+
+## 18. Email & Conclusion Workflow
+
+When an officer records a decision or clicks **"Email Report"**, the system generates a gap-free, responsive HTML email report delivered via SMTP.
+
+```mermaid
+flowchart TD
+    Trigger["Officer Triggers Report Dispatch"] --> LoadDetail["Load Full ApplicationDetail Entity"]
+    LoadDetail --> BuildCards["Format Issue Cards:<br/>• Mandatory Parameter Checks<br/>• Form Completeness Checks<br/>• Certificate Authenticity<br/>• Cross-Document Consistency<br/>• Budget Limits"]
+    BuildCards --> AssembleHTML["Assemble Responsive HTML Template<br/>(Deep Navy & Gold Government Header, KPI Grid, Action Items)"]
+    AssembleHTML --> ResolveRecipient{"Recipient Email Valid?"}
+    ResolveRecipient -- "No Email" --> Error400[Return 400 Bad Request]
+    ResolveRecipient -- "Valid Email" --> SMTPLink["Connect to SMTP Server<br/>(TLS Port 587 / SSL Port 465)"]
+    SMTPLink --> Send["smtplib.sendmail(MIME Multipart HTML)"]
+    Send --> LogAudit["Record 'report_email_sent' in AuditLog"]
+```
+
+---
+
+## 19. Frontend Architecture
+
+The frontend is a single-page application built on **React 18**, **TypeScript**, and **Tailwind CSS**, strictly enforcing the Government Environmental Review Portal design system.
+
+```mermaid
+graph TD
+    subgraph Root ["App.tsx"]
+        Shell["layouts/Shell.tsx (Government Topbar, Sidebar, Multilingual)"]
+    end
+
+    subgraph Pages ["pages/"]
+        Landing["LandingPage.tsx (Public Overview & Process Videos)"]
+        Login["LoginPage.tsx (Officer Authentication)"]
+        Dashboard["Dashboard.tsx (Action Queue & Priorities)"]
+        NewApp["NewApplication.tsx (3-Step Guided Submission)"]
+        AppDetails["ApplicationDetails.tsx (Overview, Docs, Validation, Rules)"]
+        AppProc["ApplicationProcessing.tsx (7-Stage Sequential Pipeline)"]
+        ValVerif["ValidationVerification.tsx (Checklists & Contradictions)"]
+        ScoreExp["ScoringExplainability.tsx (AI Risk Index & Decision Support)"]
+        Reviewer["ReviewerWorkspace.tsx (Decision Cockpit & Email Dispatch)"]
+        Schemes["SchemeRules.tsx (Statutory Policy Guidelines)"]
+        Analytics["Analytics.tsx (Operational Metrics & Risk Distribution)"]
+        Audit["AuditTrail.tsx (Chronological Compliance Log)"]
+    end
+
+    subgraph SharedComponents ["components/"]
+        Badges["StatusBadge, RiskBadge, RecommendationBadge"]
+        Headers["PageHeader, MetricCard, FindingCard"]
+        Knowledge["KnowledgeSearch.tsx"]
+        Language["LanguageSelector.tsx (EN / HI)"]
+    end
+
+    subgraph ServiceLayer ["services/"]
+        ApiClient["api.ts (Axios / Fetch REST Client)"]
+    end
+
+    Root --> Shell
+    Shell --> Pages
+    Pages --> SharedComponents
+    Pages --> ApiClient
+```
+
+---
+
+## 20. Backend Architecture
+
+The backend is built with **FastAPI** and **Python 3.11+**, structured with strict dependency injection, domain services, and repository layers.
+
+- **FastAPI ASGI Server**: High-throughput async request handling.
+- **SQLAlchemy 2.0 ORM**: Type-annotated mapped columns, explicit relationships, and SQLite/Postgres compatibility.
+- **Pydantic v2**: Strict payload validation, serialization, and schema enforcement.
+- **Modular Services**: Independent service singletons (`validation_service`, `feature_engineering_service`, `prediction_service`, `llm_reasoning_service`).
+
+---
+
+## 21. Database Architecture & Data Model
+
+Below is the complete entity-relationship diagram representing all 18 database entities:
+
+```mermaid
+erDiagram
+    ROLES ||--o{ USERS : assigns
+    USERS ||--o{ REVIEWER_ASSIGNMENTS : assigned_to
+    SCHEMES ||--o{ SCHEME_RULES : contains
+    SCHEMES ||--o{ APPLICATIONS : applies_under
+    APPLICATIONS ||--o{ DOCUMENTS : attaches
+    APPLICATIONS ||--o{ EXTRACTED_DATA : contains
+    APPLICATIONS ||--o{ APPLICATION_PROFILES : synthesizes
+    APPLICATIONS ||--o{ VALIDATION_RESULTS : produces
+    APPLICATIONS ||--o{ RULE_RESULTS : evaluates
+    APPLICATIONS ||--o{ FEATURES : extracts
+    APPLICATIONS ||--o{ MODEL_PREDICTIONS : generates
+    APPLICATIONS ||--o{ EVIDENCE : links
+    APPLICATIONS ||--o{ REVIEWER_ASSIGNMENTS : routes_to
+    APPLICATIONS ||--o{ REVIEWER_DECISIONS : concludes_with
+    APPLICATIONS ||--o{ AUDIT_LOGS : logs
+    APPLICATIONS ||--o{ FEEDBACK : receives
+    APPLICATIONS ||--o{ NOTIFICATIONS : triggers
+    DOCUMENTS ||--o{ EXTRACTED_DATA : extracts_from
+
+    APPLICATIONS {
+        string id PK
+        string scheme_id FK
+        string external_reference
+        string applicant_name
+        string project_title
+        string project_category
+        json form_data
+        string status
+        string processing_status
+        string ai_recommendation
+        json workflow_state
+        datetime created_at
+        datetime updated_at
+    }
+
+    DOCUMENTS {
+        string id PK
+        string application_id FK
+        string filename
+        string document_type
+        string mime_type
+        string file_path
+        string checksum
+        string processing_status
+        float classification_confidence
+        string ocr_status
+        json metadata
+        datetime uploaded_at
+    }
+
+    APPLICATION_PROFILES {
+        string id PK
+        string application_id FK
+        json profile_json
+        float extraction_confidence
+        int version
+        datetime created_at
+    }
+
+    VALIDATION_RESULTS {
+        string id PK
+        string application_id FK
+        string validation_type
+        string status
+        text message
+        string severity
+        json evidence
+        datetime created_at
+    }
+
+    RULE_RESULTS {
+        string id PK
+        string application_id FK
+        string scheme_rule_id FK
+        string rule_id
+        string rule_name
+        string result
+        json expected_value
+        json actual_value
+        text reason
+        datetime created_at
+    }
+
+    FEATURES {
+        string id PK
+        string application_id FK
+        json features_json
+        string feature_version
+        boolean trusted
+        datetime created_at
+    }
+
+    MODEL_PREDICTIONS {
+        string id PK
+        string application_id FK
+        string model_name
+        string model_version
+        float quality_score
+        float risk_score
+        float confidence
+        string prediction_class
+        json feature_contributions
+        string provider
+        string status
+        datetime created_at
+    }
+
+    EVIDENCE {
+        string id PK
+        string application_id FK
+        string document_id FK
+        string finding_type
+        string source
+        string locator
+        string extracted_value
+        float confidence
+        json metadata
+        datetime created_at
+    }
+
+    REVIEWER_DECISIONS {
+        string id PK
+        string application_id FK
+        string reviewer_id
+        string decision
+        boolean override_ai_recommendation
+        text override_reason
+        text comments
+        datetime decided_at
+    }
+
+    AUDIT_LOGS {
+        string id PK
+        string application_id FK
+        string actor_id
+        string event_type
+        json event_payload
+        datetime created_at
+    }
+```
+
+---
+
+## 22. API Architecture & Endpoints
+
+| Category | HTTP Method | Endpoint Path | Description |
+| :--- | :--- | :--- | :--- |
+| **Auth** | `POST` | `/api/v1/auth/token` | Issue demo / testing JWT access token. |
+| **Auth** | `GET` | `/api/v1/auth/me` | Fetch authenticated user role and identity. |
+| **Applications** | `POST` | `/api/v1/applications` | Create a new environmental clearance application. |
+| **Applications** | `GET` | `/api/v1/applications` | List all applications ordered by creation date. |
+| **Applications** | `GET` | `/api/v1/applications/{id}` | Get complete application detail with predictions and findings. |
+| **Applications** | `DELETE` | `/api/v1/applications/{id}` | Permanently delete application and cascading records. |
+| **Documents** | `POST` | `/api/v1/applications/{id}/documents` | Upload a PDF, DOCX, XLSX, or image attachment. |
+| **Documents** | `DELETE` | `/api/v1/documents/{id}` | Remove an uploaded document from an application. |
+| **Processing** | `POST` | `/api/v1/applications/{id}/process` | Execute full automated processing pipeline. |
+| **Validation** | `GET` | `/api/v1/applications/{id}/validation` | Retrieve deterministic, RAG, and cross-doc check results. |
+| **Scoring** | `GET` | `/api/v1/applications/{id}/score` | Fetch XGBoost predictions, risk scores, and gain contributions. |
+| **Evidence** | `GET` | `/api/v1/applications/{id}/evidence` | List all extracted evidence citations and policy chunks. |
+| **Review** | `POST` | `/api/v1/applications/{id}/review` | Submit official reviewer decision (Approve / Clarify / Reject). |
+| **Email** | `POST` | `/api/v1/applications/{id}/send-report` | Dispatch clearance report to applicant email via SMTP. |
+| **Knowledge** | `GET` | `/api/v1/knowledge/search` | Query scheme guideline chunks via vector similarity. |
+| **Analytics** | `GET` | `/api/v1/analytics/overview` | Fetch system-wide metrics, risk distribution, and throughput. |
+
+---
+
+## 23. Authentication & Authorization
+
+- **JWT Bearer Authentication**: Signed using `HS256` with configurable `JWT_SECRET` and expiration (`JWT_EXPIRE_MINUTES`).
+- **Role Hierarchy**:
+  - `admin`: Full system configuration, scheme rule modifications.
+  - `senior_reviewer`: High-risk application review authority, decision overrides.
+  - `reviewer`: Standard case review, clarification dispatch.
+  - `viewer`: Read-only access to audit logs and analytics.
+- **Configurable Enforcement**: Controlled via `AUTH_ENABLED` in `backend/.env`. When disabled for local demonstrations (`DEMO_MODE=true`), default test identities are injected cleanly.
+
+---
+
+## 24. Error Handling & Resilience
+
+The platform implements explicit exception hierarchies rather than generic try-catch blocks:
+
+```mermaid
+flowchart TD
+    subgraph Failures ["Failure Types"]
+        F1["OCR Unreadable / Corrupted Scan"]
+        F2["LLM 429 Rate Limit / Timeout"]
+        F3["Malformed LLM JSON Response"]
+        F4["Missing Model .UBJ Artifact"]
+        F5["SMTP Network Connection Failure"]
+    end
+
+    subgraph Handlers ["Resilience Strategies"]
+        H1["Flag ocr_status='FAILED'; proceed with regex extraction"]
+        H2["Trigger Exponential Backoff (3s, 6s); fallback to openrouter/auto"]
+        H3["Pydantic schema validation failure triggers degraded mode flag"]
+        H4["Fallback to deterministic rule-based baseline scorer with warning"]
+        H5["Catch SMTPLinkError; log audit failure; return 500 with user detail"]
+    end
+
+    F1 --> H1
+    F2 --> H2
+    F3 --> H3
+    F4 --> H4
+    F5 --> H5
+```
+
+---
+
+## 25. LLM Rate Limiting & Retry Architecture
+
+- **Primary Model**: Configured via `LLM_MODEL` (e.g. `minimax/minimax-m3`, `z-ai/glm-5.2:free`).
+- **Fallback Model**: Configured via `LLM_FALLBACK_MODEL` (e.g. `openrouter/auto`).
+- **Retry Backoff Algorithm**:
+  $$\text{Delay} = \min(\text{LLM\_RETRY\_BACKOFF\_SECONDS} \times 2^{\text{attempt}}, 30.0)$$
+- **Max Retries**: 2 retries per model before switching to fallback model.
+- **Degraded Mode Protection**: If all models fail, `state["degraded_mode"] = True` is logged. Deterministic checks and XGBoost predictions remain intact.
+
+---
+
+## 26. Logging & Observability
+
+Every pipeline execution produces standardized structured logs:
+```
+[PIPELINE] application=APP_ID stage=INGEST status=STARTED documents=4
+[PIPELINE] application=APP_ID stage=EXTRACT document=DOC_ID provider=pdfplumber confidence=0.920 status=COMPLETED duration_ms=450
+[FEATURE_ENGINEERING] features=13/13 total=38
+[FEATURE_ENGINEERING] feature=document_completeness value=1.0000
+[ML_SCORING] model_status=READY features=13/13 prediction_class=LOW_RISK risk_score=15.2 quality_score=88.5 confidence=0.912
+[PIPELINE] application=APP_ID stage=LLM_REASONING llm_status=COMPLETED duration_ms=1850
+[PIPELINE] application=APP_ID status=AWAITING_HUMAN_REVIEW reviewer_role=senior_reviewer recommendation=APPROVE
+```
+
+---
+
+## 27. Data Flow Tables
+
+| Stage | Input Data | Transformation / Processing | Output Data | Persisted Entity |
+| :--- | :--- | :--- | :--- | :--- |
+| **INGEST** | Uploaded Multipart File | Checksum calculation, MIME validation, storage | File path on disk | `Document` |
+| **EXTRACT** | Stored File on Disk | Text parsing, OCR, entity regex, classification | Raw field key-values | `ExtractedData` |
+| **NORMALIZE** | Multiple `ExtractedData` | Canonical merging, conflict resolution | Unified JSON Profile | `ApplicationProfile` |
+| **VALIDATE** | Profile + Scheme Rules | Schema validation, cross-doc comparison, RAG | Validation checklist | `ValidationResult`, `Evidence` |
+| **RULE_EVAL** | Profile + Rules DB | Deterministic criteria & boundary testing | Pass/Fail outcomes | `RuleResult` |
+| **FEATURES** | Profile + Val + Rules | 38 pipeline metrics → 13 ML features | 13-element float vector | `FeatureSet` |
+| **ML_SCORING** | 13-element feature vector | Inference on 3 XGBoost `.ubj` models | Risk score, class, quality | `ModelPrediction` |
+| **LLM_REASON** | Scores + Evidence + Profile | OpenRouter prompt, Pydantic schema validation | Case rationale narrative | `Application.workflow_state` |
+| **ROUTE** | Scores + Deficiencies | Policy-based role assignment | Assigned Reviewer Role | `ReviewerAssignment` |
+| **HUMAN_REV** | Reviewer Input | Decision selection, override reason, notes | Official clearance sign-off | `ReviewerDecision`, `AuditLog` |
+
+---
+
+## 28. Security Architecture
+
+1. **Secrets Management**: Loaded exclusively from environment variables (`.env`). Secrets are never logged or exposed via API serializers.
+2. **File Upload Security**:
+   - Whitelist validation (`pdf, docx, xlsx, csv, jpg, jpeg, png, json, txt, tiff`).
+   - File size ceiling: 25 MB (`MAX_UPLOAD_BYTES`).
+   - Storage path isolation: files stored under randomized UUID subdirectories.
+3. **Database Security**: Parameterized queries via SQLAlchemy ORM prevent SQL injection vulnerabilities.
+4. **CORS Policy**: Configured to restrict origin requests strictly to authorized client domains.
+
+---
+
+## 29. Deployment Architecture
+
+```mermaid
+graph TB
+    subgraph ProductionDeployment ["Production Environment"]
+        LB["Reverse Proxy / Nginx / Load Balancer<br/>(HTTPS Port 443 / SSL Termination)"]
+        
+        subgraph FrontendNodes ["Static Web Tier"]
+            Static["Vite Production Bundle (dist/)<br/>Served via Nginx / Cloudflare Pages"]
+        end
+
+        subgraph BackendNodes ["Application Tier"]
+            Gunicorn["Gunicorn / Uvicorn Workers<br/>FastAPI ASGI Server (Python 3.11+)"]
+        end
+
+        subgraph DatabaseTier ["Storage Tier"]
+            Postgres[(PostgreSQL 15+ Cluster)]
+            PersistentFS["Persistent Encrypted Storage Volume<br/>(/data/uploads & /data/chroma)"]
+        end
+
+        subgraph ExternalCloud ["External Secure APIs"]
+            OpenRouterProd["OpenRouter / OpenAI Endpoints"]
+            GovSMTP["Government SMTP Mail Relay"]
+        end
+    end
+
+    LB --> Static
+    LB --> Gunicorn
+    Gunicorn --> Postgres
+    Gunicorn --> PersistentFS
+    Gunicorn --> OpenRouterProd
+    Gunicorn --> GovSMTP
+```
+
+---
+
+## 30. Local Development Architecture
+
+- **Backend**: Python 3.11+ virtual environment (`venv`) running `uvicorn app.main:app --reload --port 8000`.
+- **Database**: SQLite embedded database file (`application_intelligence.db`) with auto-migration on startup.
+- **Frontend**: Node.js 18+ running Vite development server (`npm run dev`) on `http://localhost:5173`.
+- **Mock Fallbacks**: System operates out-of-the-box in `DEMO_MODE=true` with baseline fallback scorers and mock embedding models when external cloud services are offline.
+
+---
+
+## 31. Technology Stack
+
+| Layer | Technology | Version | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Frontend UI** | React | `^18.3.1` | Declarative component UI hierarchy. |
+| **Language (UI)** | TypeScript | `^5.6.2` | Static typing and interfaces for API responses. |
+| **Build Tool** | Vite | `^6.4.3` | Optimized ES module bundler and dev server. |
+| **Styling** | Tailwind CSS | `^3.4.1` | Utility-first government design system styling. |
+| **Multilingual** | i18next / react-i18next | `^13.5.0` | English and Hindi (`hi`) runtime translation. |
+| **Icons** | Lucide React | `^0.460.0` | Government and administrative iconography. |
+| **Backend API** | FastAPI | `^0.115.0` | Async REST API framework with OpenAPI docs. |
+| **ASGI Server** | Uvicorn | `^0.30.0` | High-performance ASGI web server. |
+| **Language (API)** | Python | `3.11+` | Core backend execution runtime. |
+| **ORM** | SQLAlchemy | `^2.0.35` | Relational database mapping and query builder. |
+| **Data Validation** | Pydantic / Pydantic Settings | `^2.9.0` | Schema enforcement and environment loading. |
+| **ML Models** | XGBoost | `^2.1.1` | Gradient-boosted decision trees for risk/quality scoring. |
+| **Vector DB** | ChromaDB | `^0.5.5` | Embedded vector database for RAG retrieval. |
+| **Embeddings** | sentence-transformers | `^3.0.1` | Local dense vector embedding generation. |
+| **OCR Engine** | Tesseract / Pytesseract | `^0.3.10` | Optical character recognition for scanned PDFs. |
+| **PDF Extraction** | pdfplumber / pypdf | `^0.11.0` | Digital text and table extraction. |
+| **Workflow** | LangGraph | `^0.2.0` | Directed state machine graph for pipeline stages. |
+| **Test Suites** | Pytest / Pytest-asyncio | `^9.0.0` | Automated unit and integration testing. |
+
+---
+
+## 32. Detailed Implementation Flow
+
+### Complete Execution Trace
+
+```
+1. Client POST /api/v1/applications
+   ↳ API validates payload via ApplicationCreate schema.
+   ↳ Seed default scheme (GREEN-INFRA-SUPPORT) if scheme_id is null.
+   ↳ Insert row into 'applications' (status='DRAFT').
+   ↳ Insert audit log 'application_created'.
+
+2. Client POST /api/v1/applications/{id}/documents (Multi-part upload)
+   ↳ FileStorageService computes SHA-256 checksum and saves to data/uploads/{app_id}/{filename}.
+   ↳ Insert row into 'documents' (status='PENDING').
+   ↳ Insert audit log 'document_uploaded'.
+
+3. Client POST /api/v1/applications/{id}/process
+   ↳ ApplicationProcessingService initiates pipeline.
+   ↳ Update application status to 'PROCESSING'.
+   ↳ Stage INGEST: Count attached files.
+   ↳ Stage EXTRACT: DocumentIntelligenceService runs pdfplumber/Tesseract OCR. Insert ExtractedData records.
+   ↳ Stage NORMALIZE: NormalizationService resolves duplicate fields and creates ApplicationProfile.
+   ↳ Stage VALIDATE: ValidationService executes deterministic checks, cross-doc checks, and RAG retrieval. Insert ValidationResult and Evidence records.
+   ↳ Stage RULE_EVALUATION: RuleEngine tests profile values against SchemeRule criteria. Insert RuleResult records.
+   ↳ Stage FEATURE_ENGINEERING: FeatureEngineeringService computes 13 ML features. Insert FeatureSet.
+   ↳ Stage ML_SCORING: XGBoostScoringService runs risk_classifier, risk_regressor, quality_regressor. Insert ModelPrediction.
+   ↳ Stage LLM_REASONING: llm_reasoning_service queries OpenRouter API and parses JSON response into LLMReasoningOutput.
+   ↳ Stage EXPLAIN: ExplainabilityService links feature importances and failed checks.
+   ↳ Stage ROUTE: RoutingService assigns reviewer role based on risk score. Insert ReviewerAssignment.
+   ↳ Stage HUMAN_REVIEW: Set status='AWAITING_HUMAN_REVIEW' and checkpoint pipeline.
+
+4. Officer POST /api/v1/applications/{id}/review
+   ↳ ReviewService verifies officer authorization.
+   ↳ Insert ReviewerDecision (decision='APPROVE' | 'REQUEST_CLARIFICATION' | 'REJECT').
+   ↳ Update application status to 'APPROVED' | 'CLARIFICATION_REQUESTED' | 'REJECTED'.
+   ↳ Insert audit log 'decision_submitted'.
+
+5. Officer POST /api/v1/applications/{id}/send-report
+   ↳ SmtpEmailService compiles gap-free responsive HTML report with actionable issue cards.
+   ↳ Dispatch email via smtplib to applicant_email.
+   ↳ Insert audit log 'report_email_sent'.
+```
+
+---
+
+## 33. Example Application Lifecycle
+
+### Scenario: Municipal Solar & Green Roof Initiative
+1. **Applicant**: Pune Municipal Corporation (`Municipality`)
+2. **Project**: Urban Rooftop Solar & Rainwater Harvesting
+3. **Documents Attached**:
+   - `Application_Form.pdf` (Cost listed: ₹45,00,000, Duration: 18 months)
+   - `Detailed_Project_Report.pdf` (Cost listed: ₹45,00,000, Duration: 18 months)
+   - `Municipal_Charter_Certificate.pdf` (Certificate No: `PMC-ENV-2026-881`)
+4. **Validation Execution**:
+   - Mandatory Fields: `PASS` (100% complete)
+   - Scheme Limit Check: `PASS` (₹45,00,000 $\le$ ₹50,00,000 max scheme limit)
+   - Cross-Document Cost Match: `PASS` (₹45L = ₹45L)
+   - Organization Eligibility: `PASS` (`Municipality` is permitted under guideline 1.1)
+5. **XGBoost Scoring**:
+   - `prediction_class`: `LOW_RISK` (Confidence: 0.942)
+   - `risk_score`: `12.4 / 100`
+   - `quality_score`: `91.8 / 100`
+6. **LLM Reasoning**: Synthesizes summary confirming all documentation is present and compliant.
+7. **Officer Decision**: Senior Reviewer clicks **Approve** and dispatches official clearance report to `commissioner@punecorp.gov.in`.
+
+---
+
+## 34. Testing Strategy
+
+The repository maintains an automated test suite executed via `pytest`:
+- **Unit Tests (`tests/test_units.py`)**: Tests normalization conflict merging, deterministic field validation algorithms, cross-document comparison tolerances, feature vector ordering, and Pydantic schema validation.
+- **Integration Tests (`tests/test_integration.py`)**: Tests end-to-end FastAPI endpoint flows from application creation through document upload, processing pipeline execution, reviewer decision submission, and email dispatch.
+- **Frontend Type & Bundle Tests (`npm run build`)**: Executes TypeScript compiler (`tsc`) and Vite production bundle compilation to verify 0 syntax or type errors.
+
+---
+
+## 35. Performance Considerations
+
+1. **OCR Overhead**: Tesseract execution averages 1.2–3.5 seconds per scanned page. Native digital PDFs bypass OCR in under 100ms via `pdfplumber`.
+2. **Vector Retrieval Latency**: ChromaDB cosine similarity queries over 50–500 chunks complete in 8–25ms.
+3. **ML Inference Latency**: XGBoost `.ubj` in-memory tree traversal executes in under 5ms per application.
+4. **LLM Inference Latency**: OpenRouter cloud inference averages 1.5–4.2 seconds depending on network latency and model provider.
+5. **Database Indexing**: Foreign key indexes on `application_id` across all child tables guarantee sub-millisecond retrieval of complete application graphs.
+
+---
+
+## 36. Architectural Decision Records (ADRs)
+
+### ADR 1: Deterministic First, AI Second
+- **Context**: Government clearance reviews require strict legal defensibility.
+- **Decision**: All statutory scheme thresholds and cross-document comparisons are evaluated deterministically in Python. The LLM is used exclusively for post-scoring natural language explanation and cannot alter scores.
+- **Status**: Implemented.
+
+### ADR 2: XGBoost for Risk & Quality Scoring
+- **Context**: Deep neural networks introduce opacity and large memory footprints.
+- **Decision**: Use 3 gradient-boosted decision tree models (`risk_classifier`, `risk_regressor`, `quality_regressor`) serialized in UBJ format, providing fast CPU inference and gain-based feature explainability.
+- **Status**: Implemented.
+
+### ADR 3: Human-in-the-Loop Workflow Pausing
+- **Context**: Statutory clearance decisions cannot legally be delegated entirely to autonomous systems.
+- **Decision**: The automated processing pipeline pauses at the `HUMAN_REVIEW` checkpoint (`AWAITING_HUMAN_REVIEW`), requiring an authenticated officer to submit the final decision.
+- **Status**: Implemented.
+
+---
+
+## 37. Conclusion & Future Roadmap
+
+The Directorate of Environment and Climate Change Review Portal delivers a production-grade, transparent, and resilient evaluation platform that dramatically accelerates environmental application processing while safeguarding statutory governance.
+
+### Future Roadmap
+1. **GIS Spatial Layers**: Direct integration with QGIS / GeoTIFF map layers to automatically verify project coordinates against protected forest and coastal regulation zones (CRZ).
+2. **Citizen Portal API**: Public REST webhook endpoints for real-time application tracking and automated SMS alerts.
+3. **Federated Multimodal OCR**: Integration with vision-language models (e.g. Gemini Flash) for complex tabular financial audit statements.

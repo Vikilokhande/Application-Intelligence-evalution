@@ -23,25 +23,23 @@ interface PipelineStageDef {
 }
 
 const STAGE_DEFS: PipelineStageDef[] = [
-  { stepNum: "01", id: "intake",      titleKey: "processing.stage_intake_title",      defaultTitle: "Application Intake",   subKey: "processing.stage_intake_sub",      defaultSub: "Verification",      descKey: "processing.stage_intake_desc",      defaultDesc: "Verifying applicant identity and project submission details." },
-  { stepNum: "02", id: "documents",   titleKey: "processing.stage_documents_title",   defaultTitle: "Document Check",       subKey: "processing.stage_documents_sub",   defaultSub: "Intake & Review",   descKey: "processing.stage_documents_desc",   defaultDesc: "Confirming all required clearance reports and certificates are attached." },
-  { stepNum: "03", id: "extraction",  titleKey: "processing.stage_extraction_title",  defaultTitle: "Data Extraction",      subKey: "processing.stage_extraction_sub",  defaultSub: "Form Parameters",   descKey: "processing.stage_extraction_desc",  defaultDesc: "Structuring project costs, location coordinates, and timelines." },
-  { stepNum: "04", id: "eligibility", titleKey: "processing.stage_eligibility_title", defaultTitle: "Scheme Eligibility",   subKey: "processing.stage_eligibility_sub", defaultSub: "Guideline Check",   descKey: "processing.stage_eligibility_desc", defaultDesc: "Checking compliance against state scheme guidelines and criteria." },
-  { stepNum: "05", id: "policy",      titleKey: "processing.stage_policy_title",      defaultTitle: "Policy Evidence",      subKey: "processing.stage_policy_sub",      defaultSub: "Standards Cross-Check", descKey: "processing.stage_policy_desc",      defaultDesc: "Cross-referencing applicable environmental regulations and norms." },
-  { stepNum: "06", id: "risk",        titleKey: "processing.stage_risk_title",        defaultTitle: "Risk Evaluation",      subKey: "processing.stage_risk_sub",        defaultSub: "Assessment",        descKey: "processing.stage_risk_desc",        defaultDesc: "Evaluating compliance risk indicators and application consistency." },
-  { stepNum: "07", id: "advisory",    titleKey: "processing.stage_advisory_title",    defaultTitle: "AI Recommendation",    subKey: "processing.stage_advisory_sub",    defaultSub: "Decision Advisory", descKey: "processing.stage_advisory_desc",    defaultDesc: "Synthesizing clearance advisory findings and summary notes." },
-  { stepNum: "08", id: "clearance",   titleKey: "processing.stage_clearance_title",   defaultTitle: "Reviewer Decision",    subKey: "processing.stage_clearance_sub",   defaultSub: "Ready for Action",  descKey: "processing.stage_clearance_desc",   defaultDesc: "Prepared and routed for official reviewer review and sign-off." },
+  { stepNum: "01", id: "received",    titleKey: "processing.stage_received_title",    defaultTitle: "Application Received", subKey: "processing.stage_received_sub",    defaultSub: "Intake Logged",     descKey: "processing.stage_received_desc",    defaultDesc: "Application form metadata and applicant identity successfully registered." },
+  { stepNum: "02", id: "documents",   titleKey: "processing.stage_documents_title",   defaultTitle: "Documents Checked",     subKey: "processing.stage_documents_sub",   defaultSub: "Files Verified",    descKey: "processing.stage_documents_desc",   defaultDesc: "Required clearance reports, certificates, and attachments verified." },
+  { stepNum: "03", id: "extraction",  titleKey: "processing.stage_extraction_title",  defaultTitle: "Data Extracted",        subKey: "processing.stage_extraction_sub",  defaultSub: "Key Field Data",    descKey: "processing.stage_extraction_desc",  defaultDesc: "Project costs, boundaries, schedules, and entity details extracted." },
+  { stepNum: "04", id: "validation",  titleKey: "processing.stage_validation_title",  defaultTitle: "Validation",           subKey: "processing.stage_validation_sub",  defaultSub: "Consistency Audit", descKey: "processing.stage_validation_desc",  defaultDesc: "Cross-document consistency and data boundary checks completed." },
+  { stepNum: "05", id: "rules",       titleKey: "processing.stage_rules_title",       defaultTitle: "Rule Check",           subKey: "processing.stage_rules_sub",       defaultSub: "Policy Compliance", descKey: "processing.stage_rules_desc",       defaultDesc: "Deterministic environmental guidelines and statutory thresholds evaluated." },
+  { stepNum: "06", id: "assessment",  titleKey: "processing.stage_assessment_title",  defaultTitle: "AI Assessment",        subKey: "processing.stage_assessment_sub",  defaultSub: "Decision Support",  descKey: "processing.stage_assessment_desc",  defaultDesc: "Risk indicators analyzed and decision support advisory generated." },
+  { stepNum: "07", id: "decision",    titleKey: "processing.stage_decision_title",    defaultTitle: "Reviewer Decision",    subKey: "processing.stage_decision_sub",    defaultSub: "Officer Sign-Off",  descKey: "processing.stage_decision_desc",    defaultDesc: "Case summary prepared for authorized Government Officer review." },
 ];
 
 type StageStatus = "completed" | "active" | "failed" | "pending";
 
 function getInitialStageIndex(ps: string, st: string): number {
-  if (st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION")) return 8;
-  if (st.includes("AWAITING_HUMAN_REVIEW") || ps.includes("AWAITING_HUMAN_REVIEW") || ps === "COMPLETED" || ps === "PROCESSED") return 8;
-  if (ps.includes("AI") || ps.includes("LLM") || ps.includes("REASON")) return 7;
-  if (ps.includes("SCOR") || ps.includes("ML") || ps.includes("FEATURE")) return 6;
-  if (ps.includes("EVIDENCE") || ps.includes("RAG")) return 5;
-  if (ps.includes("VALID")) return 4;
+  if (st.includes("APPROVED") || st.includes("REJECTED") || st.includes("CLARIFICATION")) return 7;
+  if (st.includes("AWAITING_HUMAN_REVIEW") || ps.includes("AWAITING_HUMAN_REVIEW") || ps === "COMPLETED" || ps === "PROCESSED") return 7;
+  if (ps.includes("AI") || ps.includes("LLM") || ps.includes("REASON")) return 6;
+  if (ps.includes("SCOR") || ps.includes("ML") || ps.includes("RULE")) return 5;
+  if (ps.includes("VALID") || ps.includes("EVIDENCE") || ps.includes("RAG")) return 4;
   if (ps.includes("EXTRACT") || ps.includes("NORMALIZ")) return 3;
   if (ps.includes("DOCUMENT") || ps.includes("CLASSIF") || ps.includes("OCR")) return 2;
   return 1;
@@ -189,7 +187,7 @@ export function ApplicationProcessing({
               <h2 className="font-sans text-sm font-bold tracking-wide text-[#0A243F]">
                 {t("processing.title", "Sequential Verification Pipeline")}
               </h2>
-              <p className="font-sans text-[11px] text-[#66717C]">8-Stage Continuous Review Workflow</p>
+              <p className="font-sans text-[11px] text-[#66717C]">7-Stage Continuous Review Workflow</p>
             </div>
           </div>
 
@@ -323,7 +321,7 @@ export function ApplicationProcessing({
               <div className="flex items-center justify-between">
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-[#D5A51A]/40 bg-[#D5A51A]/20 px-3 py-1 text-xs font-bold text-[#D5A51A]">
                   <Sparkles size={13} />
-                  <span>STEP {currentStageDef.stepNum} OF 08 · {t("common.processing", "EXECUTING")}</span>
+                  <span>STEP {currentStageDef.stepNum} OF 07 · {t("common.processing", "EXECUTING")}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Loader2 size={18} className="animate-spin text-[#D5A51A]" />
@@ -354,7 +352,7 @@ export function ApplicationProcessing({
               <div className="flex flex-col items-center justify-center py-2 space-y-2">
                 <div className="relative flex items-center justify-center">
                   <div className="h-12 w-12 rounded-full border-4 border-[#0A243F]/20 border-t-[#D5A51A] animate-spin" />
-                  <Sparkles size={18} className="absolute text-[#0A2540]" />
+                  <Sparkles size={18} className="absolute text-[#0A243F]" />
                 </div>
                 <p className="text-xs font-bold text-[#0A243F] uppercase tracking-wider">{t("processing.running", "Processing Application Package…")}</p>
               </div>
@@ -376,7 +374,7 @@ export function ApplicationProcessing({
               </div>
 
               {/* Travelling Mini Stage Dots */}
-              <div className="grid grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-7 gap-1.5">
                 {STAGE_DEFS.map((s, i) => (
                   <div
                     key={s.id}
@@ -393,7 +391,7 @@ export function ApplicationProcessing({
 
               <div className="rounded-xl border border-[#E5E7EB] bg-white p-3 flex items-center justify-between text-xs text-[#66717C]">
                 <span className="flex items-center gap-1.5 font-medium">
-                  <ShieldCheck size={14} className="text-[#0A2540]" />
+                  <ShieldCheck size={14} className="text-[#0A243F]" />
                   {t("common.app_tagline", "Automated Clearance Check")}
                 </span>
                 <span className="font-semibold text-[#0A243F]">{t("common.processing", "Processing...")}</span>

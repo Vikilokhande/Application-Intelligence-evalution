@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DECC Environmental Review Platform — Executive Presentation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --navy: #0A2540;
+      --navy-dark: #071A2B;
+      --gold: #C59B27;
+      --gold-light: #FFFBEB;
+      --gold-border: #FDE68A;
+      --slate-50: #F8FAFC;
+      --slate-100: #F1F5F9;
+      --slate-200: #E2E8F0;
+      --slate-300: #CBD5E1;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-900: #0F172A;
+      --green: #15803D;
+      --green-bg: #DCFCE7;
+      --red: #DC2626;
+      --red-bg: #FEF2F2;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #071A2B;
+      color: #0F172A;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Control Bar */
+    .top-bar {
+      height: 52px;
+      background: var(--navy-dark);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      color: white;
+      z-index: 100;
+    }
+    .top-bar .title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top-bar .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: var(--gold);
+      color: var(--navy-dark);
+      border-color: var(--gold);
+    }
+    .slide-counter {
+      font-size: 12px;
+      font-weight: 700;
+      color: #94A3B8;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Deck Viewport */
+    .deck-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: #0B1E33;
+    }
+
+    .slide {
+      display: none;
+      width: 1100px;
+      height: 620px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+      padding: 40px 48px;
+      position: relative;
+      overflow: hidden;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Slide Themes */
+    .slide-dark {
+      background: var(--navy);
+      color: white;
+    }
+    .slide-dark h1, .slide-dark h2, .slide-dark h3 {
+      color: white;
+    }
+    .slide-dark p, .slide-dark li {
+      color: #CBD5E1;
+    }
+
+    .category-tag {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .slide-heading {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+      line-height: 1.25;
+    }
+
+    /* Grid Layouts */
+    .grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+    .grid-3x2 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      flex: 1;
+    }
+    .grid-3-cols {
+      display: grid;
+      grid-template-columns: 240px 48px 1fr 48px 240px;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+    .grid-7x1 {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      flex: 1;
+    }
+    .stack-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .card {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 12px;
+      color: var(--slate-600);
+      line-height: 1.5;
+    }
+    .card-badge {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .card-accent-red {
+      border-left: 4px solid var(--red);
+      background: var(--red-bg);
+    }
+    .card-accent-gold {
+      border: 1.5px solid var(--gold);
+      background: var(--gold-light);
+    }
+
+    /* Visual Architecture Box */
+    .arch-box {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: 12px;
+      padding: 16px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .arch-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: var(--gold);
+      font-weight: 900;
+    }
+
+    /* Stage Column Cards */
+    .stage-card {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      padding: 14px 10px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .stage-num {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--navy);
+      margin-bottom: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      background: #F1F5F9;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .stage-name {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+    .stage-desc {
+      font-size: 10.5px;
+      color: var(--slate-600);
+      line-height: 1.4;
+    }
+
+    /* Row Card */
+    .row-card {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .row-card-left {
+      display: flex;
+      flex-direction: column;
+    }
+    .row-card-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+    .row-card-desc {
+      font-size: 11.5px;
+      color: var(--slate-600);
+      margin-top: 2px;
+    }
+
+    /* Footer */
+    .slide-footer {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--slate-200);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .slide-dark .slide-footer {
+      border-top-color: rgba(255,255,255,0.1);
+    }
+
+    /* Print styling */
+    @media print {
+      body {
+        overflow: visible;
+        background: white;
+        height: auto;
+      }
+      .top-bar {
+        display: none !important;
+      }
+      .deck-container {
+        padding: 0;
+        background: white;
+        display: block;
+      }
+      .slide {
+        display: flex !important;
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+        page-break-after: always;
+        break-after: page;
+        padding: 36px 44px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Controls -->
+  <div class="top-bar">
+    <div class="title">
+      🏛️ DECC ENVIRONMENTAL REVIEW PORTAL · EXECUTIVE PRESENTATION
+    </div>
+    <div class="controls">
+      <span class="slide-counter" id="counter">SLIDE 1 / 8</span>
+      <button class="btn" onclick="prevSlide()">◀ Previous</button>
+      <button class="btn" onclick="nextSlide()">Next ▶</button>
+      <button class="btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+    </div>
+  </div>
+
+  <!-- Deck Viewport -->
+  <div class="deck-container">
+
+    <!-- ══ SLIDE 1: TITLE ══════════════════════════════════════════════════ -->
+    <div class="slide slide-dark active">
+      <div style="margin-top: auto; margin-bottom: auto; max-width: 900px;">
+        <div style="width: 48px; height: 4px; background: var(--gold); margin-bottom: 20px; border-radius: 2px;"></div>
+        <div class="category-tag">GOVERNMENT OF MAHARASHTRA • DIRECTORATE OF ENVIRONMENT & CLIMATE CHANGE</div>
+        <h1 style="font-size: 36px; font-weight: 900; line-height: 1.2; margin-bottom: 18px; color: white;">
+          Smart Environmental Application Review Platform
+        </h1>
+        <p style="font-size: 15px; color: #CBD5E1; line-height: 1.6; margin-bottom: 32px;">
+          An easy-to-use digital system that reads citizen applications, cross-checks documents for errors, verifies government scheme rules, and calculates a clear risk score to help officers make fast, fair decisions.
+        </p>
+        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(197,155,39,0.15); border: 1px solid var(--gold); padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 800; color: var(--gold); letter-spacing: 1px;">
+          <span>CORE GOVERNANCE PRINCIPLE:</span>
+          <span style="color: white;">AI ASSISTS · THE OFFICER DECIDES</span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>Executive Architecture & Innovation Deck</span>
+        <span>Slide 01 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 2: THE PROBLEM ════════════════════════════════════════════ -->
+    <div class="slide">
+      <div class="category-tag">THE CHALLENGE</div>
+      <h2 class="slide-heading">The Real-World Problem: Why Manual Review Is Slow & Difficult</h2>
+      <div class="grid-2x2">
+        <div class="card card-accent-red">
+          <div class="card-title">⏳ 15 to 30 Days of Manual Waiting</div>
+          <div class="card-desc">Officers must read dozens of physical pages and scanned PDFs line-by-line. This causes long citizen waiting times and huge office backlogs.</div>
+        </div>
+        <div class="card card-accent-red">
+          <div class="card-title">🔍 Hard to Spot Hidden Contradictions</div>
+          <div class="card-desc">If the project cost is ₹45 Lakhs in the proposal but ₹50 Lakhs in the budget sheet, catching these small differences across multiple files is very difficult by eye.</div>
+        </div>
+        <div class="card card-accent-red">
+          <div class="card-title">📚 Complex Rules Scattered in PDFs</div>
+          <div class="card-desc">Government scheme guidelines, budget caps, and eligibility limits are buried in long policy PDFs, making it hard to double-check every single rule.</div>
+        </div>
+        <div class="card card-accent-red">
+          <div class="card-title">⚖️ No Clear Way to Prioritize Cases</div>
+          <div class="card-desc">Officers have no quick risk summary. Clean, straightforward applications take just as long to process as suspicious or high-risk ones.</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 02 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 3: OUR SOLUTION ═══════════════════════════════════════════ -->
+    <div class="slide">
+      <div class="category-tag">WHAT WE BUILT</div>
+      <h2 class="slide-heading">Our Solution: Fast Automated Checks with Complete Officer Control</h2>
+      <div class="grid-3x2">
+        <div class="card">
+          <div class="card-badge">STEP 1: READ</div>
+          <div class="card-title">Smart Document Reader</div>
+          <div class="card-desc">Reads digital PDFs, scanned files, spreadsheets, and certificates automatically using smart OCR technology.</div>
+        </div>
+        <div class="card">
+          <div class="card-badge">STEP 2: COMPARE</div>
+          <div class="card-title">Cross-Document Checker</div>
+          <div class="card-desc">Compares all files at once to instantly spot any mismatches in project costs, dates, or applicant names.</div>
+        </div>
+        <div class="card">
+          <div class="card-badge">STEP 3: MATCH</div>
+          <div class="card-title">Instant Policy Matcher</div>
+          <div class="card-desc">Searches government policy guides to make sure the project fits all legal guidelines and funding limits.</div>
+        </div>
+        <div class="card">
+          <div class="card-badge">STEP 4: SCORE</div>
+          <div class="card-title">Easy 0–100 Risk Score</div>
+          <div class="card-desc">Uses machine learning to give each application a clear Risk Score (0-100) and Quality Score (0-100).</div>
+        </div>
+        <div class="card">
+          <div class="card-badge">STEP 5: EXPLAIN</div>
+          <div class="card-title">Plain-English Summary</div>
+          <div class="card-desc">Provides a 2-minute case summary and suggested questions for the applicant without confusing technical jargon.</div>
+        </div>
+        <div class="card card-accent-gold">
+          <div class="card-badge">STEP 6: DECIDE</div>
+          <div class="card-title">Officer Decision Cockpit</div>
+          <div class="card-desc">The officer makes the final call (Approve, Clarify, or Reject) and sends a clear email report to the citizen in 1 click.</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 03 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 4: HIGH-LEVEL ARCHITECTURE (VISUAL DIAGRAM) ═══════════════ -->
+    <div class="slide">
+      <div class="category-tag">SYSTEM ARCHITECTURE (VISUAL MAP)</div>
+      <h2 class="slide-heading">How the System Works: A Simple 3-Part Architecture</h2>
+      <div class="grid-3-cols">
+        <!-- Box 1: Citizen Ingestion -->
+        <div class="arch-box">
+          <div class="card-badge">1. CITIZEN INPUT</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--navy); margin-bottom: 8px;">Citizen / Applicant</div>
+          <div style="font-size: 11px; color: var(--slate-600); line-height: 1.5;">
+            Submits application with attached documents:<br><br>
+            • 📄 Project Proposal<br>
+            • 📊 Budget Sheet (XLSX)<br>
+            • 📋 Environmental Report<br>
+            • 📑 Org Certificate
+          </div>
+        </div>
+
+        <div class="arch-arrow">➔</div>
+
+        <!-- Box 2: Smart Processing Engines -->
+        <div class="arch-box" style="background: var(--slate-50); border: 1.5px solid var(--slate-300);">
+          <div class="card-badge">2. AUTOMATED VERIFICATION ENGINES</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--navy); margin-bottom: 10px;">Smart Background Checks</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="background: white; border: 1px solid var(--slate-200); border-radius: 8px; padding: 10px;">
+              <div style="font-size: 11.5px; font-weight: 800; color: var(--navy);">📖 Smart Reader</div>
+              <div style="font-size: 10px; color: var(--slate-600); margin-top: 2px;">Extracts text & tables from scans via OCR.</div>
+            </div>
+            <div style="background: white; border: 1px solid var(--slate-200); border-radius: 8px; padding: 10px;">
+              <div style="font-size: 11.5px; font-weight: 800; color: var(--navy);">🔍 Cross-Checker</div>
+              <div style="font-size: 10px; color: var(--slate-600); margin-top: 2px;">Spots mismatched budgets and timelines.</div>
+            </div>
+            <div style="background: white; border: 1px solid var(--slate-200); border-radius: 8px; padding: 10px;">
+              <div style="font-size: 11.5px; font-weight: 800; color: var(--navy);">📚 Scheme Matcher</div>
+              <div style="font-size: 10px; color: var(--slate-600); margin-top: 2px;">Checks official legal scheme rules & caps.</div>
+            </div>
+            <div style="background: white; border: 1px solid var(--slate-200); border-radius: 8px; padding: 10px;">
+              <div style="font-size: 11.5px; font-weight: 800; color: var(--navy);">🎯 AI Risk Score</div>
+              <div style="font-size: 10px; color: var(--slate-600); margin-top: 2px;">Calculates clear 0-100 risk & quality score.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arch-arrow">➔</div>
+
+        <!-- Box 3: Officer Decision & Email -->
+        <div class="arch-box" style="background: var(--gold-light); border: 1.5px solid var(--gold);">
+          <div class="card-badge">3. OFFICER DECISION</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--navy); margin-bottom: 8px;">Government Officer</div>
+          <div style="font-size: 11px; color: var(--slate-600); line-height: 1.5;">
+            1. Reviews verified evidence<br>
+            2. Checks AI risk indicator<br>
+            3. <strong>Makes official decision:</strong><br>
+               &nbsp;&nbsp;✓ Approve<br>
+               &nbsp;&nbsp;⚠ Clarify<br>
+               &nbsp;&nbsp;✕ Reject<br>
+            4. <strong>Sends citizen report via email in 1 click</strong>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 04 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 5: END-TO-END WORKFLOW (VISUAL PIPELINE) ═══════════════════ -->
+    <div class="slide">
+      <div class="category-tag">STEP-BY-STEP WORKFLOW</div>
+      <h2 class="slide-heading">End-to-End Journey: 7 Simple Steps from Upload to Clearance</h2>
+      <div class="grid-7x1">
+        <div class="stage-card">
+          <div class="stage-num">STEP 01</div>
+          <div class="stage-name">Submit Form</div>
+          <div class="stage-desc">Citizen fills details & uploads files online.</div>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">STEP 02</div>
+          <div class="stage-name">Verify Files</div>
+          <div class="stage-desc">System checks file types & safety hashes.</div>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">STEP 03</div>
+          <div class="stage-name">Read Data</div>
+          <div class="stage-desc">Smart OCR reader extracts text & tables.</div>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">STEP 04</div>
+          <div class="stage-name">Cross-Check</div>
+          <div class="stage-desc">Compares numbers across all files.</div>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">STEP 05</div>
+          <div class="stage-name">Check Rules</div>
+          <div class="stage-desc">Verifies scheme budget limits & criteria.</div>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">STEP 06</div>
+          <div class="stage-name">AI Risk Score</div>
+          <div class="stage-desc">Computes 0-100 risk & quality score.</div>
+        </div>
+        <div class="stage-card card-accent-gold">
+          <div class="stage-num" style="background: var(--gold); color: var(--navy-dark);">STEP 07</div>
+          <div class="stage-name">Officer Decides</div>
+          <div class="stage-desc">Officer signs off & emails citizen report.</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 05 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 6: TECHNICAL INNOVATIONS ══════════════════════════════════ -->
+    <div class="slide">
+      <div class="category-tag">KEY INNOVATIONS</div>
+      <h2 class="slide-heading">Why Our Platform Is Special: 5 Key Superpowers</h2>
+      <div class="stack-rows">
+        <div class="row-card">
+          <div class="row-card-left">
+            <div class="row-card-title">1. 100% Reliable Legal Checks (No Guesswork)</div>
+            <div class="row-card-desc">Mandatory fields, budget limits, and scheme eligibility are calculated using exact mathematical rules. The AI never guesses or makes up fake pass results.</div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-card-left">
+            <div class="row-card-title">2. Automatic Conflict Spotter</div>
+            <div class="row-card-desc">If the proposal mentions a 12-month timeline but the schedule says 24 months, the system immediately flags this contradiction for the officer to review.</div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-card-left">
+            <div class="row-card-title">3. Instant Policy Clause Finder</div>
+            <div class="row-card-desc">The system searches official government scheme documents and highlights the exact policy paragraph relevant to the application.</div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-card-left">
+            <div class="row-card-title">4. Objective 0–100 Risk & Quality Index</div>
+            <div class="row-card-desc">Instead of a vague recommendation, officers see clear numerical scores (e.g. Risk: 15/100, Quality: 92/100) showing exactly which factors contributed.</div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-card-left">
+            <div class="row-card-title">5. Always Stays Working (Resilient Design)</div>
+            <div class="row-card-desc">Even if internet AI services experience temporary delays, all core checks, document readers, and scoring models continue working smoothly without stopping.</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 06 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 7: REVIEWER WORKSPACE & EMAIL ═════════════════════════════ -->
+    <div class="slide">
+      <div class="category-tag">DECISION & NOTIFICATION</div>
+      <h2 class="slide-heading">Officer Cockpit & Instant Citizen Communication</h2>
+      <div class="grid-2x2">
+        <div class="card">
+          <div class="card-badge">FOR GOVERNMENT OFFICERS</div>
+          <div class="card-title">The Officer Decision Cockpit</div>
+          <div class="card-desc" style="font-size: 11.5px; line-height: 1.6;">
+            • <strong>Clear Step-by-Step Overview:</strong> View application details, flagged mismatches, and scheme rules all in one clean screen.<br>
+            • <strong>One-Click Decisions:</strong> Choose Approve, Request Clarification, or Reject based on verified facts.<br>
+            • <strong>Full Legal Accountability:</strong> If an officer chooses to override the AI advice, their written reason is securely recorded for government audit.<br>
+            • <strong>English & Hindi Support:</strong> Switch between English and Hindi (मराठी/हिंदी) instantly.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-badge">FOR CITIZENS & APPLICANTS</div>
+          <div class="card-title">Clear Email Clearance Reports</div>
+          <div class="card-desc" style="font-size: 11.5px; line-height: 1.6;">
+            • <strong>1-Click Email Dispatch:</strong> Officers click 'Email Report' to send an official digital summary directly to the citizen's inbox.<br>
+            • <strong>Simple Action Cards:</strong> If documents are missing or numbers don't match, the email clearly explains what the citizen needs to fix.<br>
+            • <strong>Clean Mobile & Desktop Layout:</strong> Emails look beautiful on both mobile phones and desktop computers.<br>
+            • <strong>Instant Delivery:</strong> Sent securely in seconds via standard email relays.
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 07 / 08</span>
+      </div>
+    </div>
+
+    <!-- ══ SLIDE 8: IMPACT & CONCLUSION ════════════════════════════════════ -->
+    <div class="slide slide-dark">
+      <div style="margin-top: auto; margin-bottom: auto; max-width: 960px;">
+        <div class="category-tag">REAL-WORLD IMPACT</div>
+        <h1 style="font-size: 32px; font-weight: 900; line-height: 1.25; margin-bottom: 24px; color: white;">
+          Faster Reviews. Total Transparency. Zero Guesswork.
+        </h1>
+        <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+          <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px 20px;">
+            <div style="font-size: 15px; font-weight: 800; color: var(--gold); margin-bottom: 4px;">⚡ 90% Faster for Citizens</div>
+            <div style="font-size: 12px; color: #CBD5E1;">Citizens get responses in days instead of waiting up to a month for manual file review.</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px 20px;">
+            <div style="font-size: 15px; font-weight: 800; color: var(--gold); margin-bottom: 4px;">🔒 100% Transparent & Auditable</div>
+            <div style="font-size: 12px; color: #CBD5E1;">Every single calculation, rule test, and officer decision is permanently saved for total accountability.</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px 20px;">
+            <div style="font-size: 15px; font-weight: 800; color: var(--gold); margin-bottom: 4px;">🛡️ Zero Mistakes in Policy Rules</div>
+            <div style="font-size: 12px; color: #CBD5E1;">Mathematical checks and policy guideline search eliminate accidental human oversights.</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>DECC Environmental Review Portal</span>
+        <span>Slide 08 / 08</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const counter = document.getElementById('counter');
+
+    function showSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= slides.length) index = slides.length - 1;
+      slides[currentSlide].classList.remove('active');
+      currentSlide = index;
+      slides[currentSlide].classList.add('active');
+      counter.textContent = `SLIDE ${currentSlide + 1} / ${slides.length}`;
+    }
+
+    function nextSlide() {
+      showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      showSlide(currentSlide - 1);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      }
+    });
+  </script>
+</body>
+</html>
