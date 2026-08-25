@@ -401,12 +401,16 @@ function AIAssistant({
   const evidenceCount= detail.evidence.length;
 
   const actionItems: string[] = [];
-  fails.slice(0, 3).forEach(f =>
-    actionItems.push(`Resolve check: ${f.validation_type.replaceAll("_", " ")} — ${f.message}`)
-  );
-  warns.slice(0, 2).forEach(w =>
-    actionItems.push(`Verify: ${w.validation_type.replaceAll("_", " ")} — ${w.message}`)
-  );
+  fails.slice(0, 3).forEach(f => {
+    const ev = (f.evidence ?? {}) as Record<string, unknown>;
+    const name = String(ev.display_field ?? ev.field_name ?? f.validation_type.replaceAll("_", " "));
+    actionItems.push(`Resolve check: ${name} — ${f.message}`);
+  });
+  warns.slice(0, 2).forEach(w => {
+    const ev = (w.evidence ?? {}) as Record<string, unknown>;
+    const name = String(ev.display_field ?? ev.field_name ?? w.validation_type.replaceAll("_", " "));
+    actionItems.push(`Verify: ${name} — ${w.message}`);
+  });
   clarQs.slice(0, 3).forEach(q => actionItems.push(q));
   if (detail.documents.filter(d => (d.processing_status ?? "").toUpperCase() === "FAILED").length > 0)
     actionItems.push(t("details.delete_doc_confirm", "Check document clarity for unparsed files."));

@@ -207,29 +207,46 @@ class RealDocumentParser(DocumentParser):
         except ImportError as exc:
             raise ImportError("pypdf is required for PDF parsing. Install with: pip install pypdf") from exc
 
-        reader = pypdf.PdfReader(str(path))
-        pages: list[dict[str, Any]] = []
-        all_text_parts: list[str] = []
+        try:
+            reader = pypdf.PdfReader(str(path))
+            pages: list[dict[str, Any]] = []
+            all_text_parts: list[str] = []
 
-        for page_num, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() or ""
-            pages.append({"page": page_num, "text": page_text, "char_count": len(page_text)})
-            if page_text.strip():
-                all_text_parts.append(f"[Page {page_num}]\n{page_text}")
+            for page_num, page in enumerate(reader.pages, start=1):
+                page_text = page.extract_text() or ""
+                pages.append({"page": page_num, "text": page_text, "char_count": len(page_text)})
+                if page_text.strip():
+                    all_text_parts.append(f"[Page {page_num}]\n{page_text}")
 
-        full_text = "\n\n".join(all_text_parts)
-        return {
-            "text": full_text,
-            "pages": pages,
-            "tables": [],
-            "metadata": {
-                "filename": path.name,
-                "page_count": len(reader.pages),
-                "size_bytes": path.stat().st_size,
-            },
-            "parser": "pypdf",
-            "parser_version": getattr(pypdf, "__version__", "unknown"),
-        }
+            full_text = "\n\n".join(all_text_parts)
+            return {
+                "text": full_text,
+                "pages": pages,
+                "tables": [],
+                "metadata": {
+                    "filename": path.name,
+                    "page_count": len(reader.pages),
+                    "size_bytes": path.stat().st_size,
+                },
+                "parser": "pypdf",
+                "parser_version": getattr(pypdf, "__version__", "unknown"),
+            }
+        except Exception:
+            # Fallback if text-based file was saved with .pdf extension
+            try:
+                raw_text = path.read_text(encoding="utf-8", errors="ignore").strip()
+                if len(raw_text) > 10 and not raw_text.startswith("%PDF"):
+                    return {
+                        "text": raw_text,
+                        "pages": [{"page": 1, "text": raw_text, "char_count": len(raw_text)}],
+                        "tables": [],
+                        "metadata": {"filename": path.name, "size_bytes": path.stat().st_size},
+                        "parser": "text-fallback",
+                        "parser_version": "1.0",
+                    }
+            except Exception:
+                pass
+            raise
 
     # ---- DOCX ---------------------------------------------------------------
 
@@ -461,6 +478,21 @@ class TesseractOCRProvider(OCRProvider):
         try:
             pdf_doc = fitz.open(str(path))
         except Exception as exc:
+            try:
+                raw_text = path.read_text(encoding="utf-8", errors="ignore").strip()
+                if len(raw_text) > 10:
+                    return {
+                        "text": raw_text,
+                        "pages": [{"page": 1, "text": raw_text, "confidence": 1.0}],
+                        "confidence": 1.0,
+                        "page_count": 1,
+                        "provider": "text-fallback",
+                        "renderer": "text",
+                        "language": lang,
+                        "status": "SUCCESS",
+                    }
+            except Exception:
+                pass
             raise OCRProviderError(
                 f"PyMuPDF could not open PDF '{path.name}': {exc}",
                 provider="tesseract",

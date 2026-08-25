@@ -301,6 +301,29 @@ class ValidationService:
         )
         if field_name is not None:
             payload.setdefault("field_name", field_name)
+            HUMAN_FIELD_MAP = {
+                "applicant.name": "Applicant Full Name",
+                "applicant.organization_type": "Organization / Entity Type",
+                "applicant.email": "Applicant Email Address",
+                "project.title": "Project Title",
+                "project.category": "Project Category",
+                "financial.project_cost": "Estimated Project Cost",
+                "timeline.duration_months": "Project Duration",
+                "certificates.certificate_number": "Certificate Number",
+                "applicant_name": "Applicant Full Name",
+                "organization_type": "Organization / Entity Type",
+                "project_title": "Project Title",
+                "project_category": "Project Category",
+                "project_cost": "Estimated Project Cost",
+                "duration_months": "Project Duration",
+                "certificate_number": "Certificate Number",
+                "environmental_benefit": "Environmental Benefit",
+            }
+            if str(field_name) in HUMAN_FIELD_MAP:
+                payload.setdefault("display_field", HUMAN_FIELD_MAP[str(field_name)])
+            else:
+                clean_name = str(field_name).replace("applicant.", "").replace("project.", "").replace("financial.", "").replace("timeline.", "").replace("certificates.", "")
+                payload.setdefault("display_field", clean_name.replace("_", " ").title())
 
         extracted_value = self._first_present(
             payload.get("extracted_value"),
@@ -1348,8 +1371,18 @@ class ValidationService:
             "timeline.duration_months": ("duration_months", "numeric"),
             "certificates.certificate_number": ("certificate_information", "text"),
         }
+        HUMAN_FIELD_NAMES = {
+            "applicant.name": "Applicant Full Name",
+            "applicant.organization_type": "Organization / Entity Type",
+            "project.title": "Project Title",
+            "project.category": "Project Category",
+            "financial.project_cost": "Estimated Project Cost",
+            "timeline.duration_months": "Project Duration",
+            "certificates.certificate_number": "Certificate Number",
+        }
         results: list[ValidationResult] = []
         for profile_path, (field_name, compare_type) in fields.items():
+            display_title = HUMAN_FIELD_NAMES.get(profile_path, profile_path)
             values = self._raw_values_for(profile, profile_path)
             document_values = [
                 item for item in values
@@ -1363,21 +1396,21 @@ class ValidationService:
             if len(by_source) < 2:
                 # NOT_VERIFIABLE = evidence unavailable; NOT_CHECKED = deliberately skipped
                 doc_count = len(by_source)
-                reason = (
-                    f"{profile_path} — only {doc_count} document-derived value(s) found; "
-                    "cross-document comparison requires at least 2 documents with the same field extracted."
-                    " Status: NOT_VERIFIABLE — evidence unavailable."
-                )
+                doc_a_val = str(by_source[0]["value"]) if len(by_source) >= 1 else "Not available"
+                doc_a_file = str(by_source[0].get("filename") or "Document") if len(by_source) >= 1 else ""
+                doc_a_str = f"{doc_a_file}: {doc_a_val}" if doc_a_file and doc_a_val != "Not available" else doc_a_val
+                doc_b_str = "Not available"
+
                 results.append(
                     self._result(
                         application_id,
                         "CROSS_DOCUMENT_CONSISTENCY",
                         "NOT_VERIFIABLE",
                         (
-                            "Cross-document comparison requires additional supporting documents. Required evidence unavailable."
+                            f"{display_title}: Cross-document comparison requires additional supporting documents. Required evidence unavailable."
                             if total_documents < 2
                             else (
-                                f"{profile_path} has only {doc_count} distinct document-derived value(s); "
+                                f"{display_title} has only {doc_count} distinct document-derived value(s); "
                                 "cross-document comparison requires at least 2 uploaded documents with the same field extracted. "
                                 "Required evidence unavailable."
                             )
@@ -1385,6 +1418,14 @@ class ValidationService:
                         "WARNING",
                         {
                             "field": profile_path,
+                            "field_name": profile_path,
+                            "display_field": display_title,
+                            "document_a": doc_a_str,
+                            "document_b": doc_b_str,
+                            "document_a_name": doc_a_file or "Not available",
+                            "document_b_name": "Not available",
+                            "document_a_value": doc_a_val,
+                            "document_b_value": "Not available",
                             "values": by_source,
                             "form_values": form_values,
                             "doc_count": doc_count,
@@ -1401,13 +1442,16 @@ class ValidationService:
 
             contradiction, payload = self._compare_source_values(profile_path, by_source, compare_type)
             payload["form_values"] = form_values
+            payload["display_field"] = display_title
+            payload["field_name"] = profile_path
+
             if payload.get("status") == "NOT_VERIFIABLE":
                 results.append(
                     self._result(
                         application_id,
                         "CROSS_DOCUMENT_CONSISTENCY",
                         "NOT_VERIFIABLE",
-                        f"{profile_path} could not be compared across documents. Required evidence unavailable.",
+                        f"{display_title} could not be compared across documents. Required evidence unavailable.",
                         "WARNING",
                         payload,
                         check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
@@ -1425,7 +1469,7 @@ class ValidationService:
                         application_id,
                         "CROSS_DOCUMENT_CONSISTENCY",
                         "PASS",
-                        f"{profile_path} is consistent across submitted documents.",
+                        f"{display_title} is consistent across submitted documents.",
                         "INFO",
                         payload,
                         check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
@@ -1467,7 +1511,7 @@ class ValidationService:
                     application_id,
                     "CROSS_DOCUMENT_CONSISTENCY",
                     "FAIL",
-                    f"CONTRADICTION DETECTED: {profile_path} differs across submitted documents.",
+                    f"CONTRADICTION DETECTED: {display_title} differs across submitted documents.",
                     "ERROR",
                     payload,
                     check_id=f"CROSS_DOCUMENT_{field_name.upper()}",
@@ -1547,9 +1591,22 @@ class ValidationService:
             }
             for item in values
         ]
+        doc_a = documents[0] if len(documents) >= 1 else {}
+        doc_b = documents[1] if len(documents) >= 2 else {}
+        doc_a_val = str(doc_a.get("value") if doc_a.get("value") is not None else "Not available")
+        doc_b_val = str(doc_b.get("value") if doc_b.get("value") is not None else "Not available")
+        doc_a_file = str(doc_a.get("filename") or "Document A")
+        doc_b_file = str(doc_b.get("filename") or "Document B")
+
         payload = {
             "field": field,
             "documents": documents,
+            "document_a": f"{doc_a_file}: {doc_a_val}" if doc_a_file and doc_a_val != "Not available" else doc_a_val,
+            "document_b": f"{doc_b_file}: {doc_b_val}" if doc_b_file and doc_b_val != "Not available" else doc_b_val,
+            "document_a_name": doc_a_file,
+            "document_b_name": doc_b_file,
+            "document_a_value": doc_a_val,
+            "document_b_value": doc_b_val,
             "values": [item.get("value") for item in values],
             "status": "CONSISTENT",
             "decision": "PASS",

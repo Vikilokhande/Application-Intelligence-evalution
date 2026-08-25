@@ -21,17 +21,51 @@ function fmtDate(iso: string | null | undefined) {
   catch { return iso; }
 }
 
-function cleanCheckName(name: string): string {
-  const map: Record<string, string> = {
-    REQUIRED_FIELD: "Mandatory Field Verification",
-    COMPLETENESS: "Data Completeness Check",
-    BUSINESS_RULE_PRECHECK: "Scheme Rule Pre-Check",
-    CROSS_DOCUMENT_CONSISTENCY: "Cross-Document Consistency Check",
-    FIELD_VALIDATION: "Field Parameter Validation",
-    DATA_RANGE: "Threshold & Cost Range Check",
-    DATA_TYPE: "Data Format Validation",
-  };
-  return map[name] ?? name.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+const HUMAN_FIELD_MAP: Record<string, string> = {
+  REQUIRED_FIELD: "Mandatory Field Verification",
+  COMPLETENESS: "Data Completeness Check",
+  BUSINESS_RULE_PRECHECK: "Scheme Rule Pre-Check",
+  CROSS_DOCUMENT_CONSISTENCY: "Cross-Document Consistency Check",
+  FIELD_VALIDATION: "Field Parameter Validation",
+  DATA_RANGE: "Threshold & Cost Range Check",
+  DATA_TYPE: "Data Format Validation",
+  AUTHENTICITY_INDICATOR: "Document Authenticity & Certificate Check",
+  DUPLICATE_DETECTION: "Duplicate Application Check",
+  SUSPICIOUS_INDICATOR: "Anomaly & Integrity Indicator Check",
+  SCHEMA: "Application Profile Schema Check",
+  REQUIRED_DOCUMENT: "Required Supporting Documents Check",
+  SCHEME_KNOWLEDGE_RETRIEVAL: "Scheme Knowledge Base Verification",
+  RAG_PROJECT_COST_LIMIT: "Scheme Project Cost Limit Check",
+  RAG_PROJECT_DURATION_LIMIT: "Scheme Duration Limit Check",
+  RAG_ORGANIZATION_ELIGIBILITY: "Eligible Organization Type Check",
+  RAG_PROJECT_CATEGORY_ELIGIBILITY: "Project Category Eligibility Check",
+  RAG_REQUIRED_DOCUMENTS: "Supporting Documents Guideline Check",
+  RAG_SCHEME_VALIDATION: "Scheme Guidelines Match Check",
+  DOCUMENT_LLM: "Semantic Document Quality Validation",
+  "applicant.name": "Applicant Full Name",
+  "applicant.organization_type": "Organization / Entity Type",
+  "applicant.email": "Applicant Email Address",
+  "project.title": "Project Title",
+  "project.category": "Project Category",
+  "financial.project_cost": "Estimated Project Cost",
+  "timeline.duration_months": "Project Duration",
+  "certificates.certificate_number": "Certificate Number",
+};
+
+function cleanCheckName(name: string, ev?: Record<string, unknown>): string {
+  if (ev?.display_field && typeof ev.display_field === "string") {
+    return ev.display_field;
+  }
+  if (ev?.field_name && typeof ev.field_name === "string" && HUMAN_FIELD_MAP[ev.field_name]) {
+    return HUMAN_FIELD_MAP[ev.field_name];
+  }
+  if (ev?.check_id && typeof ev.check_id === "string") {
+    const raw = ev.check_id.replace(/^CROSS_DOCUMENT_/, "").replace(/^RAG_/, "");
+    if (HUMAN_FIELD_MAP[raw]) return HUMAN_FIELD_MAP[raw];
+    return raw.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+  }
+  if (HUMAN_FIELD_MAP[name]) return HUMAN_FIELD_MAP[name];
+  return name.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function cleanValidationMessage(message: string | null | undefined): string {
@@ -478,17 +512,16 @@ export function ApplicationDetails({
                 <tbody className="divide-y divide-slate-100">
                   {[...fails, ...warns, ...passes].map((v, i) => (
                     <tr key={i} className="hover:bg-slate-50 transition">
-                      <td className="px-5 py-3.5 font-semibold text-[#0A2540]">{cleanCheckName(v.validation_type)}</td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 font-semibold text-[#0A2540]">{cleanCheckName(v.validation_type, v.evidence as Record<string, unknown> | undefined)}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
                           v.status === "PASS"           ? "bg-emerald-100 text-emerald-800" :
                           v.status === "FAIL"           ? "bg-rose-100 text-rose-800" :
-                          v.status.includes("NOT")      ? "bg-amber-100 text-amber-800" :
-                          v.status === "WARN"           ? "bg-amber-100 text-amber-800" :
+                          v.status === "NOT_VERIFIABLE" || v.status === "WARN" ? "bg-amber-100 text-amber-800" :
+                          v.status === "NOT_CHECKED"    ? "bg-slate-100 text-slate-600" :
                                                           "bg-slate-100 text-slate-600"
                         }`}>
-                          {v.status === "PASS" ? "✓ " : v.status === "FAIL" ? "✕ " : "⚠ "}
-                          {v.status.replaceAll("_", " ")}
+                          {v.status === "PASS" ? "✓ Passed" : v.status === "FAIL" ? "✕ Failed" : v.status === "NOT_CHECKED" ? "Skipped" : "⚠ Needs Verification"}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 text-xs hidden md:table-cell max-w-sm">{cleanValidationMessage(v.message)}</td>

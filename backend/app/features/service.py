@@ -277,16 +277,19 @@ class FeatureEngineeringService:
 
     def _consistency_ratio(self, results: list[ValidationResult], check_id: str) -> float:
         result = next((item for item in results if (item.evidence or {}).get("check_id") == check_id), None)
-        if result is None or result.status in {"NOT_CHECKED", "NOT_VERIFIABLE"}:
+        if result is None or result.status == "NOT_CHECKED":
+            return 1.0
+        if result.status == "FAIL":
             return 0.0
-        return 0.0 if result.status == "FAIL" else 1.0
+        # "PASS" or "NOT_VERIFIABLE" (uncontradicted single-source)
+        return 1.0
 
     def _document_type_consistency(self, results: list[ValidationResult]) -> float:
         llm_results = [
             item for item in results if (item.evidence or {}).get("check_id") == "DOC_TYPE_CONSISTENCY"
         ]
         if not llm_results:
-            return 0.0
+            return 1.0
         return 0.0 if any(item.status == "FAIL" for item in llm_results) else 1.0
 
     def _safe_float(self, value: Any) -> float:

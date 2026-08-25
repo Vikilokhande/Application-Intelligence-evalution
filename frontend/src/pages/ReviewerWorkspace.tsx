@@ -253,6 +253,8 @@ export function ReviewerWorkspace({
                 <>
                   {topIssues.map((issue, i) => {
                     const isFail = issue.status === "FAIL";
+                    const ev = (issue.evidence ?? {}) as Record<string, unknown>;
+                    const issueName = String(ev.display_field ?? ev.field_name ?? issue.validation_type.replaceAll("_", " "));
                     return (
                       <div
                         key={i}
@@ -264,7 +266,7 @@ export function ReviewerWorkspace({
                       >
                         <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${isFail ? "text-[#DC2626]" : "text-[#D5A51A]"}`} />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold">{issue.validation_type.replaceAll("_", " ")}</p>
+                          <p className="text-xs font-bold">{issueName}</p>
                           <p className="text-xs mt-0.5 leading-relaxed opacity-90">{issue.message}</p>
                         </div>
                       </div>
